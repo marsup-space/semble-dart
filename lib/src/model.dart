@@ -57,18 +57,36 @@ class EmbeddingModel {
     final headerJson =
         jsonDecode(utf8.decode(headerBytes)) as Map<String, dynamic>;
 
-    // Find the first non-metadata tensor. For potion-code-16M there's
-    // exactly one tensor (the embedding matrix).
+    // Find the embedding tensor. model2vec-format files (like
+    // potion-code-16M) ship 3 tensors: `mapping` (I64, token ID
+    // remap), `weights` (F64, per-token SIF weights), and
+    // `embeddings` (F32, the matrix). We use `apply_sif=False` so
+    // mapping + weights are ignored; we want the explicit
+    // `embeddings` tensor, falling back to the first 2D F32 tensor
+    // for non-model2vec files.
     Map<String, dynamic>? tensorMeta;
     String? tensorName;
     for (final entry in headerJson.entries) {
       if (entry.key == '__metadata__') continue;
-      tensorMeta = entry.value as Map<String, dynamic>;
-      tensorName = entry.key;
-      break;
+      final meta = entry.value as Map<String, dynamic>;
+      if (entry.key == 'embeddings') {
+        tensorName = entry.key;
+        tensorMeta = meta;
+        break;
+      }
+      // First-F32-2D fallback for arbitrary safetensors files.
+      if (tensorMeta == null &&
+          meta['dtype'] == 'F32' &&
+          (meta['shape'] as List).length == 2) {
+        tensorName = entry.key;
+        tensorMeta = meta;
+      }
     }
     if (tensorMeta == null || tensorName == null) {
-      throw ArgumentError('safetensors file has no tensor entries');
+      throw ArgumentError(
+        'safetensors file has no F32 2D tensor (and no '
+        '"embeddings" entry)',
+      );
     }
 
     final dtype = tensorMeta['dtype'] as String?;

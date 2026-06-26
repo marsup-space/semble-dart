@@ -175,14 +175,103 @@ void main() {
       expect(m.row(0), [42.0, 43.0]);
     });
 
-    test('rejects buffer with no tensor entries', () {
-      final headerJson = {'__metadata__': {'format': 'pt'}};
+    test('prefers tensor named "embeddings" over other F32 2D tensors', () {
+      // Real model2vec files (potion-code-16M) ship 3 tensors:
+      // mapping (I64), weights (F64), embeddings (F32). We want the
+      // explicit embeddings one, not the first 2D F32 — even though
+      // here we use a synthetic F32 helper before embeddings in the
+      // header, the loader should still pick embeddings by name.
+      final headerJson = {
+        'mapping': {
+          'dtype': 'I64',
+          'shape': [4],
+          'data_offsets': [0, 32],
+        },
+        'weights': {
+          'dtype': 'F64',
+          'shape': [4],
+          'data_offsets': [32, 64],
+        },
+        'other_f32': {
+          'dtype': 'F32',
+          'shape': [2, 2],
+          'data_offsets': [64, 80],
+        },
+        'embeddings': {
+          'dtype': 'F32',
+          'shape': [2, 2],
+          'data_offsets': [80, 96],
+        },
+      };
       final headerBytes = utf8.encode(jsonEncode(headerJson));
       final lengthBytes =
           ByteData(8)..setUint64(0, headerBytes.length, Endian.little);
+      // padding 64 bytes (32 + 32) then two F32x4 tensors (16+16).
+      final data = BytesBuilder()
+        ..add(Uint8List(32)) // mapping
+        ..add(Float64List(4).buffer.asUint8List()) // weights
+        ..add(Float32List.fromList([1.0, 2.0, 3.0, 4.0]).buffer.asUint8List())
+        ..add(Float32List.fromList([99.0, 98.0, 97.0, 96.0])
+            .buffer.asUint8List());
       final out = BytesBuilder()
         ..add(lengthBytes.buffer.asUint8List())
-        ..add(headerBytes);
+        ..add(headerBytes)
+        ..add(data.toBytes());
+      final m = EmbeddingModel.fromBytes(out.toBytes());
+      expect(m.row(0), [99.0, 98.0]);
+      expect(m.row(1), [97.0, 96.0]);
+    });
+
+    test('falls back to first 2D F32 tensor when no "embeddings" entry',
+        () {
+      // For non-model2vec safetensors files that have a single
+      // differently-named F32 2D tensor, the loader should still
+      // pick it up rather than reject the file.
+      final headerJson = {
+        'my_matrix': {
+          'dtype': 'F32',
+          'shape': [1, 2],
+          'data_offsets': [0, 8],
+        },
+      };
+      final headerBytes = utf8.encode(jsonEncode(headerJson));
+      final lengthBytes =
+          ByteData(8)..setUint64(0, headerBytes.length, Endian.little);
+      final data = Float32List.fromList([7.0, 8.0]);
+      final out = BytesBuilder()
+        ..add(lengthBytes.buffer.asUint8List())
+        ..add(headerBytes)
+        ..add(data.buffer.asUint8List());
+      final m = EmbeddingModel.fromBytes(out.toBytes());
+      expect(m.row(0), [7.0, 8.0]);
+    });
+
+    test('rejects buffer with no tensor entries', () {
+      // Only I64 + F64 tensors — no F32 anywhere. Loader should
+      // refuse rather than silently pick a wrong-type tensor.
+      final headerJson = {
+        '__metadata__': {'format': 'pt'},
+        'mapping': {
+          'dtype': 'I64',
+          'shape': [4],
+          'data_offsets': [0, 32],
+        },
+        'weights': {
+          'dtype': 'F64',
+          'shape': [4],
+          'data_offsets': [32, 64],
+        },
+      };
+      final headerBytes = utf8.encode(jsonEncode(headerJson));
+      final lengthBytes =
+          ByteData(8)..setUint64(0, headerBytes.length, Endian.little);
+      final data = BytesBuilder()
+        ..add(Uint8List(32))
+        ..add(Float64List(4).buffer.asUint8List());
+      final out = BytesBuilder()
+        ..add(lengthBytes.buffer.asUint8List())
+        ..add(headerBytes)
+        ..add(data.toBytes());
       expect(
         () => EmbeddingModel.fromBytes(out.toBytes()),
         throwsArgumentError,
