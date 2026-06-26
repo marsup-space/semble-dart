@@ -44,9 +44,10 @@ Map<String, dynamic> _tokenizerJson(
 void main() {
   group('WordPieceTokenizer.fromJson', () {
     test('parses minimal vocab + unk_token', () {
-      final t = WordPieceTokenizer.fromJson(_tokenizerJson([
-        '[PAD]', '[UNK]', '[CLS]', '[SEP]', 'hello', 'world',
-      ]));
+      final t = WordPieceTokenizer.fromJson(_tokenizerJson(
+        ['[PAD]', '[UNK]', '[CLS]', '[SEP]', 'hello', 'world'],
+        added: ['[PAD]', '[UNK]', '[CLS]', '[SEP]'],
+      ));
       expect(t.vocab['hello'], 4);
       expect(t.vocab['world'], 5);
       expect(t.special.unkToken, '[UNK]');
@@ -142,7 +143,8 @@ void main() {
     });
 
     test('punctuation isolated as own tokens', () {
-      expect(t.tokenize('hello, world!'), [4, 13, 5, 15]);
+      // Vocab indices: hello=4, world=5, ,=12, !=13
+      expect(t.tokenize('hello, world!'), [4, 12, 5, 13]);
     });
 
     test('leading/trailing/repeated whitespace collapsed', () {
@@ -150,35 +152,39 @@ void main() {
     });
 
     test('WordPiece splits unknown suffix into subwords', () {
-      // 'helloing' → 'hello' (whole match) + '##ing' (match) → [4, 7]
-      expect(t.tokenize('helloing'), [4, 7]);
+      // Vocab indices: hello=4, ##ing=6
+      // 'helloing' → 'hello' (whole match) + '##ing' (match) → [4, 6]
+      expect(t.tokenize('helloing'), [4, 6]);
     });
 
     test('repeated subwords', () {
-      // 'helloingings' → 'hello' + '##ing' + '##ing' + '##s' → [4, 7, 7, 9]
-      expect(t.tokenize('helloingings'), [4, 7, 7, 9]);
+      // Vocab indices: hello=4, ##ing=6, ##s=8
+      // 'helloingings' → 'hello' + '##ing' + '##ing' + '##s' → [4, 6, 6, 8]
+      expect(t.tokenize('helloingings'), [4, 6, 6, 8]);
     });
 
     test('subwords with ## prefix at non-start position only', () {
-      // 'un' matches at start (no prefix), 'able' would need ## → not in
-      // vocab → ##able matches → 'unable' splits correctly.
-      expect(t.tokenize('unable'), [9, 11]);
+      // Vocab indices: un=9, ##able=10
+      // 'un' matches at start (no prefix), 'able' would need ## → ##able
+      // matches → 'unable' splits correctly.
+      expect(t.tokenize('unable'), [9, 10]);
     });
 
     test('unknown word → single [UNK]', () {
-      expect(t.tokenize('xyz'), [0]);
+      // [UNK] is id 1 (after [PAD] at 0) in this fixture.
+      expect(t.tokenize('xyz'), [1]);
     });
 
     test('partially-decomposable word → single [UNK]', () {
       // 'unabled' → 'un' matches, 'abled' no path → whole word fails →
       // [UNK] (Bert behavior: never emit partial decomposition).
-      expect(t.tokenize('unabled'), [0]);
+      expect(t.tokenize('unabled'), [1]);
     });
 
     test('word longer than maxInputCharsPerWord → [UNK]', () {
       // Default maxInputCharsPerWord is 100. 200 'a's triggers the cap.
       final long = 'a' * 200;
-      expect(t.tokenize(long), [0]);
+      expect(t.tokenize(long), [1]);
     });
 
     test('empty string → empty ids', () {
@@ -190,22 +196,25 @@ void main() {
     });
 
     test('only punctuation → ids for each punct', () {
-      expect(t.tokenize('!?,.'), [14, 12, 13, 12]);
+      // Vocab indices: !=13, ?=14, ,=12, .=11
+      expect(t.tokenize('!?,.'), [13, 14, 12, 11]);
     });
 
     test('code-like input with punctuation isolates', () {
-      // 'foo(bar)' → 'foo' [UNK], '(' [UNK], 'bar' [UNK], ')' [UNK]
-      expect(t.tokenize('foo(bar)'), [0, 0, 0, 0]);
+      // 'foo(bar)' → pretokenize → 'foo', '(', 'bar', ')' (4 tokens).
+      // Each not in vocab → [UNK] (id 1) → [1, 1, 1, 1].
+      expect(t.tokenize('foo(bar)'), [1, 1, 1, 1]);
     });
 
     test('case sensitive tokenization', () {
-      expect(t.tokenize('Hello'), [0]); // 'Hello' not in vocab
+      // 'Hello' not in vocab → [UNK] (id 1).
+      expect(t.tokenize('Hello'), [1]);
       expect(t.tokenize('hello'), [4]);
     });
 
     test('numbers pass through as their own words', () {
-      // No '123' in vocab → [UNK].
-      expect(t.tokenize('hello 123 world'), [4, 0, 5]);
+      // No '123' in vocab → [UNK] (id 1).
+      expect(t.tokenize('hello 123 world'), [4, 1, 5]);
     });
   });
 
