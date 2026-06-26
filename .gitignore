@@ -1,0 +1,20 @@
+# Standard Dart ignores
+.dart_tool/
+.packages
+pubspec.lock
+build/
+
+# Editor
+.idea/
+.vscode/
+*.iml
+
+# macOS
+.DS_Store
+
+# Native build artifacts (produced by tool/build_native.dart in Track B)
+*.o
+*.so
+*.dylib
+*.dll
+grammars-src/

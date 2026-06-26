@@ -1,0 +1,18 @@
+name: semble_dart
+publish_to: none
+description: >-
+  Pure-Dart port of MinishLab/semble for in-process semantic code search.
+  Runs as a dedicated Dart isolate and exposes token-level BM25 + static
+  Model2Vec embeddings + tree-sitter AST chunking + Reciprocal Rank
+  Fusion + code-aware reranking.
+version: 0.1.0
+
+environment:
+  sdk: ^3.11.3
+
+dependencies:
+  path: ^1.9.0
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^6.0.0
