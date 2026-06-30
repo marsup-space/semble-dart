@@ -132,24 +132,117 @@ class AstChunker {
   }
 
   CodeChunk _chunkForRange(ParsedSource parsed, _NodeRange range) {
-    final start = range.startByte.clamp(0, parsed.source.length);
-    final end = range.endByte.clamp(start, parsed.source.length);
+    // Tree-sitter returns UTF-8 byte offsets. We must convert to char
+    // offsets before using them as String indices — otherwise files
+    // with non-ASCII content (e.g. `→` in a docstring, CJK
+    // identifiers) get their chunks sliced at the wrong position.
+    // Upstream Python does this conversion in
+    // `semble.chunking.core.chunk`; we mirror it here.
+    final startChar = _byteOffsetToCharOffset(
+      parsed.source,
+      range.startByte,
+    );
+    final endChar = _byteOffsetToCharOffset(
+      parsed.source,
+      range.endByte,
+    );
+    final start = startChar.clamp(0, parsed.source.length);
+    final end = endChar.clamp(start, parsed.source.length);
     return CodeChunk(
       filePath: parsed.path,
       language: parsed.language,
-      startLine: _lineForByte(parsed.source, start),
-      endLine: _lineForByte(parsed.source, end),
-      startByte: start,
-      endByte: end,
-      content: parsed.source.substring(start, end).trimRight(),
+      startLine: _lineForStart(parsed.source, start),
+      endLine: _lineForEnd(parsed.source, end),
+      startByte: range.startByte,
+      endByte: range.endByte,
+      // No trimRight — upstream Python preserves trailing
+      // whitespace (including the indentation that closes a
+      // multi-line docstring or statement). Stripping it would
+      // diverge from the reference output and break BM25 parity.
+      content: parsed.source.substring(start, end),
       nodeType: range.nodeType,
       isDefinition: _isDefinitionNode(range.nodeType),
     );
   }
 
-  static int _lineForByte(String source, int byteOffset) {
+  /// Convert a UTF-8 byte offset (as returned by tree-sitter) into a
+  /// Dart String char offset. Mirrors `as_bytes[:byte].decode("utf-8")`
+  /// in Python. For pure-ASCII sources the conversion is the identity.
+  static int _byteOffsetToCharOffset(String source, int byteOffset) {
+    if (byteOffset <= 0) return 0;
+    var bytesSeen = 0;
+    for (var i = 0; i < source.length; i++) {
+      final c = source.codeUnitAt(i);
+      // UTF-8 length per Unicode scalar value:
+      //   1 byte  for U+0000..U+007F
+      //   2 bytes for U+0080..U+07FF
+      //   3 bytes for U+0800..U+FFFF (BMP, non-surrogate)
+      //   4 bytes for U+10000..U+10FFFF (surrogate pair in UTF-16)
+      int utf8Len;
+      if (c < 0x80) {
+        utf8Len = 1;
+      } else if (c < 0x800) {
+        utf8Len = 2;
+      } else if (c >= 0xD800 && c <= 0xDBFF) {
+        // High surrogate: full code point is 4 UTF-8 bytes; skip
+        // the matching low surrogate on the next iteration.
+        utf8Len = 4;
+        i++;
+      } else {
+        utf8Len = 3;
+      }
+      if (bytesSeen + utf8Len > byteOffset) return i;
+      bytesSeen += utf8Len;
+    }
+    return source.length;
+  }
+
+  /// Count newlines in `source[0:charOffset]` and return the 1-based
+  /// line number of the position. Pre-condition: [charOffset] is a
+  /// valid char index in [source] (i.e. NOT a byte offset).
+  ///
+  /// [charOffset] is the position OF the chunk's first char (not
+  /// "one past the last char"). The line number is the line that
+  /// the chunk starts on — mirroring upstream Python:
+  ///   `source[: boundary.start].count("\n") + 1`.
+  ///
+  /// For example, if `charOffset` is the position of the first
+  /// char of line 23 (preceded by 22 newlines), the function
+  /// returns 23.
+  static int _lineForStart(String source, int charOffset) {
+    if (charOffset <= 0) return 1;
     var line = 1;
-    final limit = byteOffset.clamp(0, source.length);
+    final limit = charOffset < source.length
+        ? charOffset
+        : source.length;
+    for (var i = 0; i < limit; i++) {
+      if (source.codeUnitAt(i) == 0x0a) line++;
+    }
+    return line;
+  }
+
+  /// Count newlines in `source[0:charOffset]` and return the 1-based
+  /// line number of the position. Pre-condition: [charOffset] is a
+  /// valid char index in [source] (i.e. NOT a byte offset).
+  ///
+  /// [charOffset] is the exclusive end (one past the last char of
+  /// the chunk). The returned line number is the 1-based line of
+  /// the chunk's last char, mirroring upstream Python:
+  ///   `source[:end_index].count("\n") + 1` where
+  ///   `end_index = boundary.end - 1`.
+  ///
+  /// This means: we exclude the last char of the chunk from the
+  /// newline count. For a chunk that ends with a `\n`, the
+  /// newline is the last char, so end_line reports the line of
+  /// the content before that trailing newline (e.g. line 2 for
+  /// a chunk whose last char is the `\n` at the end of line 2).
+  static int _lineForEnd(String source, int charOffset) {
+    if (charOffset <= 0) return 1;
+    var line = 1;
+    // `i < charOffset - 1` mirrors Python's `source[:end_index]`
+    // where `end_index = boundary.end - 1`.
+    final limit = charOffset - 1;
+    if (limit <= 0) return 1;
     for (var i = 0; i < limit; i++) {
       if (source.codeUnitAt(i) == 0x0a) line++;
     }
