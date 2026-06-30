@@ -10,6 +10,7 @@ RankedChunk _chunk(
   double dense = 0,
   bool isDefinition = false,
   List<String> stems = const [],
+  String? content,
 }) {
   return RankedChunk(
     chunk: SearchResult(
@@ -17,7 +18,7 @@ RankedChunk _chunk(
       startLine: line,
       endLine: line + 5,
       score: bm25 + dense,
-      content: 'content for $file:$line',
+      content: content ?? 'content for $file:$line',
     ),
     bm25Score: bm25,
     denseScore: dense,
@@ -33,10 +34,7 @@ void main() {
     });
 
     test('one list empty, other non-empty → still returns hits', () {
-      final hits = Fusion.fuse(
-        const [],
-        [_chunk('a.dart', 10, dense: 0.9)],
-      );
+      final hits = Fusion.fuse(const [], [_chunk('a.dart', 10, dense: 0.9)]);
       expect(hits, hasLength(1));
       expect(hits.first.filePath, 'a.dart');
     });
@@ -88,8 +86,7 @@ void main() {
       expect(hits.first.filePath, 'a.dart');
     });
 
-    test('RRF rank-1 in one list beats rank-1+rank-1 with rerank loss',
-        () {
+    test('RRF rank-1 in one list beats rank-1+rank-1 with rerank loss', () {
       // chunk A: rank 0 in BM25 only (1/(60+1) ≈ 0.0164)
       // chunk B: rank 0 in dense only (same)
       // chunk C: rank 1 in BOTH (2 * 1/(60+2) ≈ 0.0323) → wins on RRF
@@ -105,29 +102,41 @@ void main() {
     test('definition boost: same RRF, definition chunk wins', () {
       // Both at rank 0 in their respective lists → same RRF.
       // Definition chunk has the boost.
-      final def = _chunk('a.dart', 1, bm25: 1.0, isDefinition: true);
+      final def = _chunk(
+        'a.dart',
+        1,
+        bm25: 1.0,
+        isDefinition: true,
+        content: 'def parseConfig(): pass',
+      );
       final use = _chunk('b.dart', 1, dense: 1.0, isDefinition: false);
-      final hits = Fusion.fuse([def], [use]);
+      final hits = Fusion.fuse(
+        [def],
+        [use],
+        options: const FusionOptions(query: 'parseConfig'),
+      );
       expect(hits.first.filePath, 'a.dart');
     });
 
-    test('identifier stem overlap boosts', () {
-      // Both have same RRF; chunk with matching stems wins via signal 3.
+    test('natural-language query boosts matching file stems', () {
       final matched = _chunk(
-        'a.dart',
+        'lib/parse_config.dart',
         1,
         bm25: 1.0,
         stems: ['parse', 'config'],
       );
-      final unmatched = _chunk('b.dart', 1, dense: 1.0, stems: ['render']);
+      final unmatched = _chunk(
+        'lib/render.dart',
+        1,
+        dense: 1.0,
+        stems: ['render'],
+      );
       final hits = Fusion.fuse(
         [matched],
         [unmatched],
-        options: const FusionOptions(
-          queryStems: ['parse', 'config'],
-        ),
+        options: const FusionOptions(query: 'parse config'),
       );
-      expect(hits.first.filePath, 'a.dart');
+      expect(hits.first.filePath, 'lib/parse_config.dart');
     });
 
     test('file coherence: multi-chunk file beats single chunk', () {
@@ -157,10 +166,7 @@ void main() {
 
     test('noise penalty catches various test patterns', () {
       expect(
-        Fusion.fuse(
-          [_chunk('lib/a_test.dart', 1, bm25: 1.0)],
-          const [],
-        ),
+        Fusion.fuse([_chunk('lib/a_test.dart', 1, bm25: 1.0)], const []),
         // Hits exist; not asserting order, just that the file is
         // recognized as noise (penalty applied = 0.85x score). We
         // can't easily observe the penalty directly here, but we can

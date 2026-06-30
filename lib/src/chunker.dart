@@ -33,81 +33,102 @@ class CodeChunk {
 /// as siblings. Track C can enrich this with language-specific strategies once
 /// indexing and search are in place.
 class AstChunker {
-  static const int defaultMinChunkBytes = 80;
+  static const int defaultDesiredChunkBytes = 750;
+  static const int minRecursiveChunkBytes = 50;
+  static const int maxRecursionDepth = 500;
 
   final TreeSitter treeSitter;
-  final int minChunkBytes;
+  final int desiredChunkBytes;
 
   const AstChunker({
     required this.treeSitter,
-    this.minChunkBytes = defaultMinChunkBytes,
+    this.desiredChunkBytes = defaultDesiredChunkBytes,
   });
 
   List<CodeChunk> chunk(ParsedSource parsed) {
+    if (parsed.source.trim().isEmpty) return const [];
+
     final root = parsed.root();
-    final rootStart = treeSitter.startByte(root);
-    final rootEnd = treeSitter.endByte(root);
-    final children = treeSitter
-        .namedChildrenOf(root)
-        .where((node) => _hasContent(node))
-        .toList();
-
-    if (children.isEmpty) {
-      return [
-        _chunkForNode(
-          parsed,
-          root,
-          startByte: rootStart,
-          endByte: rootEnd,
-          nodeType: treeSitter.nodeTypeString(root),
-        ),
-      ];
-    }
-
-    final ranges = <_NodeRange>[];
-    _NodeRange? pending;
-    for (final child in children) {
-      final current = _NodeRange(
-        startByte: treeSitter.startByte(child),
-        endByte: treeSitter.endByte(child),
-        nodeType: treeSitter.nodeTypeString(child),
-      );
-      if (pending == null) {
-        pending = current;
-        continue;
-      }
-      if (_shouldMerge(pending, current)) {
-        pending = pending.merge(current);
-      } else {
-        ranges.add(pending);
-        pending = current;
-      }
-    }
-    if (pending != null) ranges.add(pending);
-
+    final ranges = _mergeNode(root, 0);
     return [for (final range in ranges) _chunkForRange(parsed, range)];
   }
 
   bool _hasContent(TSNode node) =>
       treeSitter.endByte(node) > treeSitter.startByte(node);
 
-  bool _shouldMerge(_NodeRange a, _NodeRange b) {
-    if (a.length >= minChunkBytes) return false;
-    if (_isDefinitionNode(a.nodeType)) return false;
-    return b.startByte >= a.endByte;
+  List<_NodeRange> _mergeNode(TSNode node, int depth) {
+    final raw = _mergeNodeInner(node, depth);
+    if (raw.isEmpty) return raw;
+    return _mergeAdjacent(raw);
   }
 
-  CodeChunk _chunkForNode(
-    ParsedSource parsed,
-    TSNode node, {
-    required int startByte,
-    required int endByte,
-    required String nodeType,
-  }) {
-    return _chunkForRange(
-      parsed,
-      _NodeRange(startByte: startByte, endByte: endByte, nodeType: nodeType),
-    );
+  List<_NodeRange> _mergeNodeInner(TSNode node, int depth) {
+    final start = treeSitter.startByte(node);
+    final end = treeSitter.endByte(node);
+    final nodeType = treeSitter.nodeTypeString(node);
+    final children = treeSitter.allChildrenOf(node).where(_hasContent).toList();
+    if (children.isEmpty) {
+      return [_NodeRange(startByte: start, endByte: end, nodeType: nodeType)];
+    }
+
+    final length = end - start;
+    if (depth > maxRecursionDepth || length < minRecursiveChunkBytes) {
+      return [_NodeRange(startByte: start, endByte: end, nodeType: nodeType)];
+    }
+
+    final groups = <_NodeRange>[];
+    var index = 0;
+    while (index < children.length) {
+      final first = children[index];
+      var groupStart = treeSitter.startByte(first);
+      var groupEnd = treeSitter.endByte(first);
+      var groupType = treeSitter.nodeTypeString(first);
+      var groupLength = groupEnd - groupStart;
+      index += 1;
+
+      if (groupLength > desiredChunkBytes) {
+        groups.addAll(_mergeNodeInner(first, depth + 1));
+        continue;
+      }
+
+      while (index < children.length) {
+        final next = children[index];
+        final nextLength =
+            treeSitter.endByte(next) - treeSitter.startByte(next);
+        if (groupLength + nextLength > desiredChunkBytes) break;
+        groupEnd = treeSitter.endByte(next);
+        groupType = '$groupType+${treeSitter.nodeTypeString(next)}';
+        groupLength += nextLength;
+        index += 1;
+      }
+
+      groups.add(
+        _NodeRange(
+          startByte: groupStart,
+          endByte: groupEnd,
+          nodeType: groupType,
+        ),
+      );
+    }
+    return groups;
+  }
+
+  List<_NodeRange> _mergeAdjacent(List<_NodeRange> chunks) {
+    final merged = <_NodeRange>[];
+    var current = chunks.first;
+    var currentLength = current.length;
+    for (final next in chunks.skip(1)) {
+      if (currentLength + next.length > desiredChunkBytes) {
+        merged.add(current);
+        current = next;
+        currentLength = next.length;
+        continue;
+      }
+      current = current.merge(next);
+      currentLength += next.length;
+    }
+    merged.add(current);
+    return merged;
   }
 
   CodeChunk _chunkForRange(ParsedSource parsed, _NodeRange range) {

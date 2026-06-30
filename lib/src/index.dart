@@ -73,7 +73,9 @@ class SembleIndex {
       throw ArgumentError('model and tokenizer must be provided together');
     }
     final stemmer = const IdentifierStemmer();
-    final stems = [for (final chunk in chunks) stemmer.stems(chunk.content)];
+    final stems = [
+      for (final chunk in chunks) stemmer.tokenizeText(chunk.content),
+    ];
     final embeddings = model == null || tokenizer == null
         ? null
         : [
@@ -107,21 +109,31 @@ class SembleIndex {
     if (allowed != null && selected!.isEmpty) return const [];
 
     final stemmer = const IdentifierStemmer();
-    final queryStems = stemmer.stems(query);
+    final queryStems = stemmer.tokenizeText(query);
     final bm25Hits = [
       for (final hit in _queryBm25(
         queryStems,
-        topK: topK * 4,
+        topK: topK * 5,
         selected: selected,
       ))
         _rankedChunk(hit.docIndex, bm25Score: hit.score),
     ];
 
-    final denseHits = _denseSearch(query, topK: topK * 4, selected: selected);
+    final denseHits = _denseSearch(query, topK: topK * 5, selected: selected);
+    final allRankedChunks = [
+      for (final index
+          in selected ?? List<int>.generate(chunks.length, (i) => i))
+        _rankedChunk(index),
+    ];
     return Fusion.fuse(
       bm25Hits,
       denseHits,
-      options: FusionOptions(topK: topK, query: query, queryStems: queryStems),
+      options: FusionOptions(
+        topK: topK,
+        query: query,
+        queryStems: queryStems,
+        allChunks: allRankedChunks,
+      ),
     );
   }
 
@@ -141,12 +153,12 @@ class SembleIndex {
 
     final anchor = chunks[anchorIndex];
     final bm25Hits = [
-      for (final hit in bm25.query(stems[anchorIndex], topK: topK * 4 + 1))
+      for (final hit in bm25.query(stems[anchorIndex], topK: topK * 5 + 1))
         if (hit.docIndex != anchorIndex)
           _rankedChunk(hit.docIndex, bm25Score: hit.score),
     ];
 
-    final denseHits = _denseRelated(anchorIndex, topK: topK * 4 + 1);
+    final denseHits = _denseRelated(anchorIndex, topK: topK * 5 + 1);
     return Fusion.fuse(
       bm25Hits,
       denseHits,
@@ -154,6 +166,10 @@ class SembleIndex {
         topK: topK,
         query: anchor.content,
         queryStems: stems[anchorIndex],
+        allChunks: [
+          for (var i = 0; i < chunks.length; i++)
+            if (i != anchorIndex) _rankedChunk(i),
+        ],
       ),
     );
   }

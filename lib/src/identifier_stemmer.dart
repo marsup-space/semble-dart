@@ -26,6 +26,12 @@
 library;
 
 class IdentifierStemmer {
+  static final _identifier = RegExp(r'[a-zA-Z_][a-zA-Z0-9_]*');
+
+  static final _upstreamCamel = RegExp(
+    r'[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+',
+  );
+
   /// Lowercase / digit → uppercase transition (camelCase boundary).
   static final _camel = RegExp(r'(?<=[a-z0-9])(?=[A-Z])');
 
@@ -62,5 +68,28 @@ class IdentifierStemmer {
       }
     }
     return result;
+  }
+
+  /// Tokenize free-form source text for BM25, matching upstream
+  /// `semble.tokens.tokenize`: identifier-like tokens only; compound
+  /// identifiers keep the original lowercase token plus split parts.
+  List<String> tokenizeText(String text) {
+    final out = <String>[];
+    for (final match in _identifier.allMatches(text)) {
+      out.addAll(_splitIdentifierUpstream(match.group(0)!));
+    }
+    return out;
+  }
+
+  List<String> _splitIdentifierUpstream(String token) {
+    final lower = token.toLowerCase();
+    final parts = token.contains('_')
+        ? lower.split('_').where((part) => part.isNotEmpty).toList()
+        : [
+            for (final match in _upstreamCamel.allMatches(token))
+              match.group(0)!.toLowerCase(),
+          ];
+    if (parts.length >= 2) return [lower, ...parts];
+    return [lower];
   }
 }

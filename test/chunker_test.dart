@@ -40,7 +40,7 @@ void main() {
     }
     ts = loaded;
     parser = TreeSitterParser(ts);
-    chunker = AstChunker(treeSitter: ts, minChunkBytes: 0);
+    chunker = AstChunker(treeSitter: ts, desiredChunkBytes: 50);
     available = true;
   });
 

@@ -35,8 +35,7 @@ void main() {
     });
 
     test('multiple underscores collapsed', () {
-      expect(stemmer.stems('__double__underscore__'),
-          ['double', 'underscore']);
+      expect(stemmer.stems('__double__underscore__'), ['double', 'underscore']);
     });
 
     test('leading underscore stripped', () {
@@ -44,22 +43,23 @@ void main() {
     });
 
     test('mixed_case splits on underscores then camel', () {
-      expect(
-          stemmer.stems('Mixed_Snake_Case'), ['mixed', 'snake', 'case']);
+      expect(stemmer.stems('Mixed_Snake_Case'), ['mixed', 'snake', 'case']);
     });
 
     test('camelCase + snake_case combined', () {
-      expect(stemmer.stems('parse_HTTP_request'),
-          ['parse', 'http', 'request']);
+      expect(stemmer.stems('parse_HTTP_request'), ['parse', 'http', 'request']);
     });
 
     test('camelCase + acronym + snake_case', () {
       // parseJSONConfig → parse|JSON|Config
       // XMLParser → XML|Parser
-      expect(
-        stemmer.stems('parseJSONConfig_XMLParser'),
-        ['parse', 'json', 'config', 'xml', 'parser'],
-      );
+      expect(stemmer.stems('parseJSONConfig_XMLParser'), [
+        'parse',
+        'json',
+        'config',
+        'xml',
+        'parser',
+      ]);
     });
 
     test('namespaced identifier splits on ::', () {
@@ -69,13 +69,11 @@ void main() {
     test('dotted identifier splits on .', () {
       // 'HTTPRequest' → acronym rule between P and R (lookahead Re,
       // upper+lower) → ['parse', 'http', 'request'].
-      expect(stemmer.stems('parse.HTTPRequest'),
-          ['parse', 'http', 'request']);
+      expect(stemmer.stems('parse.HTTPRequest'), ['parse', 'http', 'request']);
     });
 
     test('letter ↔ digit boundaries', () {
-      expect(stemmer.stems('getUserById42'),
-          ['get', 'user', 'by', 'id', '42']);
+      expect(stemmer.stems('getUserById42'), ['get', 'user', 'by', 'id', '42']);
       expect(stemmer.stems('foo123bar'), ['foo', '123', 'bar']);
     });
 
@@ -132,6 +130,34 @@ void main() {
       // acronym in 'Request'? R single upper, no run. Result:
       // ['http', '2', 'request'].
       expect(stemmer.stems('HTTP2Request'), ['http', '2', 'request']);
+    });
+  });
+
+  group('IdentifierStemmer.tokenizeText upstream parity', () {
+    test('preserves compound identifier plus camel parts', () {
+      expect(stemmer.tokenizeText('def getHTTPResponse(): pass'), [
+        'def',
+        'gethttpresponse',
+        'get',
+        'http',
+        'response',
+        'pass',
+      ]);
+    });
+
+    test('preserves snake_case identifier plus parts', () {
+      expect(stemmer.tokenizeText('my_func = config_parser'), [
+        'my_func',
+        'my',
+        'func',
+        'config_parser',
+        'config',
+        'parser',
+      ]);
+    });
+
+    test('matches identifier-like tokens only', () {
+      expect(stemmer.tokenizeText('123 + Foo::bar'), ['foo', 'bar']);
     });
   });
 }
