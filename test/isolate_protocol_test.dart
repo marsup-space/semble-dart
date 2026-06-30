@@ -58,7 +58,7 @@ void main() {
     expect(hits.single.filePath, endsWith(p.join('lib', 'auth.dart')));
 
     final related = await searchIsolate.findRelated(
-      file: hits.single.filePath,
+      file: p.join('lib', 'auth.dart'),
       line: hits.single.startLine,
       path: tempDir.path,
       topK: 2,

@@ -50,9 +50,13 @@ class _SembleSearchServer {
         case FindRelatedReq():
           await _reply(message.replyPort, () async {
             final index = await _ensureIndex(message.path);
+            final root = p.normalize(p.absolute(message.path));
+            final file = p.isAbsolute(message.file)
+                ? p.normalize(message.file)
+                : p.normalize(p.join(root, message.file));
             return FindRelatedResp(
               index.findRelated(
-                file: p.normalize(p.absolute(message.file)),
+                file: file,
                 line: message.line,
                 topK: message.topK,
               ),
