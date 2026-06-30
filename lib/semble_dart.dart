@@ -14,6 +14,8 @@ export 'src/chunker.dart' show AstChunker, CodeChunk;
 export 'src/file_walker.dart' show SembleFileWalker;
 export 'src/files.dart' show SembleContentType, SembleFileType, SembleFiles;
 export 'src/index.dart' show SembleIndex;
+export 'src/isolate_client.dart'
+    show SembleIsolateException, SembleSearchIsolate;
 export 'src/treesitter/bindings.dart' show TreeSitter, TSTree;
 export 'src/treesitter/languages.dart' show LanguageRegistry;
 export 'src/treesitter/parser.dart' show ParsedSource, TreeSitterParser;
