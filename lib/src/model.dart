@@ -26,10 +26,34 @@ class EmbeddingModel {
   final int vocabSize;
   final int dim;
 
+  /// Optional `[vocabSize]` I64 token ID remap. model2vec files
+  /// ship a `mapping` tensor so that the model can keep its
+  /// internal embedding table compact while still exposing a
+  /// stable external vocabulary; the remap converts a token's
+  /// external ID to the internal row in [weights]. `null` for
+  /// non-model2vec safetensors (where the embedding table IS the
+  /// external vocabulary, indexed 1:1 by token ID).
+  final Int32List? mapping;
+
+  /// Optional `[vocabSize]` F64 per-token SIF (Smooth Inverse
+  /// Frequency) weight. model2vec's `encode` multiplies each
+  /// token's embedding row by this weight before mean-pooling, so
+  /// high-frequency tokens (e.g. `def`, `class`, `import`) get
+  /// down-weighted and rare tokens (identifiers, domain terms)
+  /// dominate the sentence vector. `null` if the safetensors
+  /// didn't ship a `weights` tensor.
+  ///
+  /// We store the F64 values as-is and downcast to F32 at the
+  /// multiply site (numpy auto-promotes and the precision loss
+  /// is below the F32 embedding precision).
+  final Float64List? sifWeights;
+
   const EmbeddingModel._({
     required this.weights,
     required this.vocabSize,
     required this.dim,
+    this.mapping,
+    this.sifWeights,
   });
 
   /// Load from a safetensors file on disk.
@@ -60,10 +84,11 @@ class EmbeddingModel {
     // Find the embedding tensor. model2vec-format files (like
     // potion-code-16M) ship 3 tensors: `mapping` (I64, token ID
     // remap), `weights` (F64, per-token SIF weights), and
-    // `embeddings` (F32, the matrix). We use `apply_sif=False` so
-    // mapping + weights are ignored; we want the explicit
-    // `embeddings` tensor, falling back to the first 2D F32 tensor
-    // for non-model2vec files.
+    // `embeddings` (F32, the matrix). We use `apply_sif=True` to
+    // match upstream model2vec default (multiply per-token
+    // embedding by SIF weight before mean-pool) — this is what
+    // gives the dense retriever its code-aware signal and is
+    // critical for top-5 path overlap with the Python reference.
     Map<String, dynamic>? tensorMeta;
     String? tensorName;
     for (final entry in headerJson.entries) {
@@ -126,11 +151,86 @@ class EmbeddingModel {
     );
     final weights = Float32List.fromList(view);
 
+    // Optional model2vec auxiliary tensors: `mapping` (I64 token
+    // remap) and `weights` (F64 SIF weight). Both are 1D of length
+    // [vocabSize]. Reading them is best-effort — non-model2vec
+    // safetensors won't have these and we just skip SIF.
+    Int32List? mapping;
+    Float64List? sifWeights;
+    final mappingMeta = headerJson['mapping'];
+    if (mappingMeta is Map<String, dynamic>) {
+      mapping = _readI64Vector1D(bytes, headerLength, mappingMeta, vocabSize);
+    }
+    final sifMeta = headerJson['weights'];
+    if (sifMeta is Map<String, dynamic>) {
+      sifWeights = _readF64Vector1D(bytes, headerLength, sifMeta, vocabSize);
+    }
+
     return EmbeddingModel._(
       weights: weights,
       vocabSize: vocabSize,
       dim: dim,
+      mapping: mapping,
+      sifWeights: sifWeights,
     );
+  }
+
+  /// Read a 1D I64 tensor of the expected length from a safetensors
+  /// byte buffer. Returns null on any header inconsistency so the
+  /// caller can degrade gracefully when the tensor is absent or
+  /// the wrong shape.
+  static Int32List? _readI64Vector1D(
+    Uint8List bytes,
+    int headerLength,
+    Map<String, dynamic> meta,
+    int expectedLen,
+  ) {
+    if (meta['dtype'] != 'I64') return null;
+    final shape = (meta['shape'] as List?)?.cast<num>();
+    if (shape == null || shape.length != 1 || shape[0].toInt() != expectedLen) {
+      return null;
+    }
+    final offsets = (meta['data_offsets'] as List).cast<num>();
+    final start = offsets[0].toInt();
+    final end = offsets[1].toInt();
+    if (end - start != expectedLen * 8) return null;
+    final dataStart = 8 + headerLength + start;
+    final dataEnd = 8 + headerLength + end;
+    if (bytes.length < dataEnd) return null;
+    final view = ByteData.sublistView(bytes, dataStart, dataEnd);
+    final out = Int32List(expectedLen);
+    for (var i = 0; i < expectedLen; i++) {
+      out[i] = view.getInt64(i * 8, Endian.little);
+    }
+    return out;
+  }
+
+  /// Read a 1D F64 tensor of the expected length. Same graceful
+  /// degradation as [_readI64Vector1D].
+  static Float64List? _readF64Vector1D(
+    Uint8List bytes,
+    int headerLength,
+    Map<String, dynamic> meta,
+    int expectedLen,
+  ) {
+    if (meta['dtype'] != 'F64') return null;
+    final shape = (meta['shape'] as List?)?.cast<num>();
+    if (shape == null || shape.length != 1 || shape[0].toInt() != expectedLen) {
+      return null;
+    }
+    final offsets = (meta['data_offsets'] as List).cast<num>();
+    final start = offsets[0].toInt();
+    final end = offsets[1].toInt();
+    if (end - start != expectedLen * 8) return null;
+    final dataStart = 8 + headerLength + start;
+    final dataEnd = 8 + headerLength + end;
+    if (bytes.length < dataEnd) return null;
+    final view = ByteData.sublistView(bytes, dataStart, dataEnd);
+    final out = Float64List(expectedLen);
+    for (var i = 0; i < expectedLen; i++) {
+      out[i] = view.getFloat64(i * 8, Endian.little);
+    }
+    return out;
   }
 
   /// Look up the embedding row for a single token ID.
@@ -151,16 +251,32 @@ class EmbeddingModel {
   /// Returns a fresh `dim`-sized Float32List. Empty input returns the
   /// zero vector (no normalization — division by zero is avoided).
   /// Out-of-range IDs are silently skipped.
+  ///
+  /// If the safetensors shipped a `mapping` tensor, the embedding
+  /// row for token `id` is taken from row `mapping[id]`. If it also
+  /// shipped a `weights` tensor (SIF per-token down-weighting),
+  /// each token's row is multiplied by `sifWeights[id]` before
+  /// the mean. Both behaviors mirror upstream `model2vec.encode`
+  /// with the default `apply_sif=True` and are essential for the
+  /// dense retriever to match Python output byte-for-byte on
+  /// non-ASCII code.
   Float32List encode(List<int> tokenIds) {
     final result = Float32List(dim);
     if (tokenIds.isEmpty) return result;
 
+    final remap = mapping;
+    final sif = sifWeights;
     var count = 0;
     for (final id in tokenIds) {
       if (id < 0 || id >= vocabSize) continue;
-      final offset = id * dim;
+      final internalId = remap == null ? id : remap[id];
+      if (internalId < 0 || internalId >= vocabSize) continue;
+      final offset = internalId * dim;
+      // SIF weight uses the EXTERNAL id (matching model2vec's
+      // _encode_helper: `emb = emb * self.weights[id_list][:, None]`).
+      final sifWeight = sif == null ? 1.0 : sif[id];
       for (var i = 0; i < dim; i++) {
-        result[i] += weights[offset + i];
+        result[i] += weights[offset + i] * sifWeight;
       }
       count++;
     }
