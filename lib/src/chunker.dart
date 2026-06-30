@@ -24,6 +24,35 @@ class CodeChunk {
     required this.nodeType,
     required this.isDefinition,
   });
+
+  /// Copy with a subset of fields overridden. Used by
+  /// [SembleIndex.fromPath] to rewrite the chunk's [filePath] from
+  /// absolute to repo-relative after the chunker emits it, without
+  /// disturbing the other fields (which were already validated by
+  /// the chunker).
+  CodeChunk copyWith({
+    String? filePath,
+    String? language,
+    int? startLine,
+    int? endLine,
+    int? startByte,
+    int? endByte,
+    String? content,
+    String? nodeType,
+    bool? isDefinition,
+  }) {
+    return CodeChunk(
+      filePath: filePath ?? this.filePath,
+      language: language ?? this.language,
+      startLine: startLine ?? this.startLine,
+      endLine: endLine ?? this.endLine,
+      startByte: startByte ?? this.startByte,
+      endByte: endByte ?? this.endByte,
+      content: content ?? this.content,
+      nodeType: nodeType ?? this.nodeType,
+      isDefinition: isDefinition ?? this.isDefinition,
+    );
+  }
 }
 
 /// AST-aware chunker backed by tree-sitter.

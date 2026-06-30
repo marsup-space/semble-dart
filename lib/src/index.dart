@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:path/path.dart' as p;
+
 import 'bm25.dart';
 import 'cache.dart';
 import 'chunker.dart';
@@ -8,6 +10,7 @@ import 'fusion.dart';
 import 'identifier_stemmer.dart';
 import 'model.dart';
 import 'protocol.dart';
+import 'sparse.dart';
 import 'tokenizer.dart';
 import 'treesitter/parser.dart';
 
@@ -45,16 +48,28 @@ class SembleIndex {
     final chunks = <CodeChunk>[];
 
     for (final path in paths) {
+      // Store repo-relative paths on chunks (not absolute), so BM25
+      // enrichment + cache keys are stable across machines. The
+      // cache key is the absolute path (machine-local) but the
+      // stored chunk.filePath is the relative form. Mirrors
+      // upstream Python's `chunk_path = file_path.relative_to(
+      // display_root) if display_root else file_path`.
+      final displayPath = p.relative(path, from: rootPath);
+
       final cached = await cache?.readChunks(path);
       if (cached != null) {
-        chunks.addAll(cached);
+        chunks.addAll(
+          cached.map((c) => c.copyWith(filePath: displayPath)),
+        );
         continue;
       }
 
       final parsed = await parser.parseFile(path);
       try {
         final parsedChunks = chunker.chunk(parsed);
-        chunks.addAll(parsedChunks);
+        chunks.addAll(
+          parsedChunks.map((c) => c.copyWith(filePath: displayPath)),
+        );
         await cache?.writeChunks(path, parsedChunks);
       } finally {
         parsed.close();
@@ -73,8 +88,17 @@ class SembleIndex {
       throw ArgumentError('model and tokenizer must be provided together');
     }
     final stemmer = const IdentifierStemmer();
+    // Mirror upstream `semble.index.create`: BM25 tokens are built
+    // from `enrich_for_bm25(chunk)` (content + file stem × 2 + last
+    // 3 directory components), not just content. This lets BM25
+    // pick up file-name and path-component matches, which are the
+    // bread and butter of code-search queries like "how does
+    // chunking work?" or "where's the cache invalidation?".
     final stems = [
-      for (final chunk in chunks) stemmer.tokenizeText(chunk.content),
+      for (final chunk in chunks)
+        stemmer.tokenizeText(
+          enrichForBm25(content: chunk.content, filePath: chunk.filePath),
+        ),
     ];
     final embeddings = model == null || tokenizer == null
         ? null

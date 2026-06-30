@@ -50,10 +50,16 @@ class _SembleSearchServer {
         case FindRelatedReq():
           await _reply(message.replyPort, () async {
             final index = await _ensureIndex(message.path);
+            // Chunks are stored with repo-relative file paths
+            // (mirrors upstream Python's `display_root` behavior).
+            // Normalize the caller's [file] to that form before the
+            // anchor lookup so a caller can pass either an absolute
+            // or a relative path and still hit the right chunk.
             final root = p.normalize(p.absolute(message.path));
-            final file = p.isAbsolute(message.file)
+            final absolute = p.isAbsolute(message.file)
                 ? p.normalize(message.file)
                 : p.normalize(p.join(root, message.file));
+            final file = p.relative(absolute, from: root);
             return FindRelatedResp(
               index.findRelated(
                 file: file,
