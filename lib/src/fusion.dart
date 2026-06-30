@@ -100,11 +100,7 @@ class Fusion {
     // 3. File coherence: count how many candidates each file contributes.
     final fileCounts = <String, int>{};
     for (final c in byKey.values) {
-      fileCounts.update(
-        c.filePath,
-        (v) => v + 1,
-        ifAbsent: () => 1,
-      );
+      fileCounts.update(c.filePath, (v) => v + 1, ifAbsent: () => 1);
     }
 
     // 4. Apply rerank signals.
@@ -134,10 +130,10 @@ class Fusion {
       }
 
       // 4c. Identifier stems overlap.
-      if (queryStemSet != null && queryStemSet.isNotEmpty &&
+      if (queryStemSet != null &&
+          queryStemSet.isNotEmpty &&
           chunk.stems.isNotEmpty) {
-        final overlap =
-            queryStemSet.intersection(chunk.stems.toSet()).length;
+        final overlap = queryStemSet.intersection(chunk.stems.toSet()).length;
         if (overlap > 0) {
           score *= 1.0 + 0.1 * overlap;
         }
@@ -185,11 +181,7 @@ class Fusion {
     }
   }
 
-  static void _addRrf(
-    Map<String, double> rrf,
-    List<RankedChunk> hits,
-    int k,
-  ) {
+  static void _addRrf(Map<String, double> rrf, List<RankedChunk> hits, int k) {
     for (var i = 0; i < hits.length; i++) {
       final key = _key(hits[i]);
       final contrib = 1.0 / (k + i + 1);
@@ -209,9 +201,15 @@ class Fusion {
   /// Detect test files, compatibility shims, and declaration stubs.
   static bool _isNoiseFile(String path) {
     final lower = path.toLowerCase();
-    return lower.contains('/test/') ||
+    return lower.startsWith('test/') ||
+        lower.startsWith('tests/') ||
+        lower.startsWith('__tests__/') ||
+        lower.startsWith('example/') ||
+        lower.startsWith('examples/') ||
+        lower.contains('/test/') ||
         lower.contains('/tests/') ||
         lower.contains('/__tests__/') ||
+        lower.endsWith('/__init__.py') ||
         lower.endsWith('_test.dart') ||
         lower.endsWith('_test.py') ||
         lower.endsWith('_test.go') ||

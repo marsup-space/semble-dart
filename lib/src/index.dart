@@ -90,17 +90,34 @@ class SembleIndex {
     );
   }
 
-  List<SearchResult> search(String query, {int topK = 8}) {
+  List<SearchResult> search(
+    String query, {
+    int topK = 8,
+    List<String>? filterPaths,
+  }) {
     if (topK < 1 || query.trim().isEmpty || chunks.isEmpty) return const [];
+
+    final allowed = filterPaths?.map(_normalizeFilterPath).toSet();
+    final selected = allowed == null
+        ? null
+        : [
+            for (var i = 0; i < chunks.length; i++)
+              if (allowed.contains(_normalizeFilterPath(chunks[i].filePath))) i,
+          ];
+    if (allowed != null && selected!.isEmpty) return const [];
 
     final stemmer = const IdentifierStemmer();
     final queryStems = stemmer.stems(query);
     final bm25Hits = [
-      for (final hit in bm25.query(queryStems, topK: topK * 4))
+      for (final hit in _queryBm25(
+        queryStems,
+        topK: topK * 4,
+        selected: selected,
+      ))
         _rankedChunk(hit.docIndex, bm25Score: hit.score),
     ];
 
-    final denseHits = _denseSearch(query, topK: topK * 4);
+    final denseHits = _denseSearch(query, topK: topK * 4, selected: selected);
     return Fusion.fuse(
       bm25Hits,
       denseHits,
@@ -141,7 +158,27 @@ class SembleIndex {
     );
   }
 
-  List<RankedChunk> _denseSearch(String query, {required int topK}) {
+  List<BM25Hit> _queryBm25(
+    List<String> queryStems, {
+    required int topK,
+    List<int>? selected,
+  }) {
+    if (selected == null) return bm25.query(queryStems, topK: topK);
+    final hits = <BM25Hit>[];
+    for (final index in selected) {
+      final score = bm25.scoreDoc(index, queryStems);
+      if (score > 0) hits.add(BM25Hit(index, score));
+    }
+    hits.sort((a, b) => b.score.compareTo(a.score));
+    if (hits.length > topK) return hits.sublist(0, topK);
+    return hits;
+  }
+
+  List<RankedChunk> _denseSearch(
+    String query, {
+    required int topK,
+    List<int>? selected,
+  }) {
     final localModel = model;
     final localTokenizer = tokenizer;
     final localEmbeddings = embeddings;
@@ -151,7 +188,7 @@ class SembleIndex {
       return const [];
     }
     final queryVector = localModel.encode(localTokenizer.tokenize(query));
-    return _denseNearest(queryVector, topK: topK);
+    return _denseNearest(queryVector, topK: topK, selected: selected);
   }
 
   List<RankedChunk> _denseRelated(int anchorIndex, {required int topK}) {
@@ -168,12 +205,15 @@ class SembleIndex {
     Float32List queryVector, {
     required int topK,
     int? excludeIndex,
+    List<int>? selected,
   }) {
     final localEmbeddings = embeddings;
     if (localEmbeddings == null || topK < 1) return const [];
 
     final scored = <(int, double)>[];
-    for (var i = 0; i < localEmbeddings.length; i++) {
+    final candidates =
+        selected ?? List<int>.generate(localEmbeddings.length, (i) => i);
+    for (final i in candidates) {
       if (i == excludeIndex) continue;
       final score = EmbeddingModel.cosineSimilarity(
         queryVector,
@@ -208,4 +248,6 @@ class SembleIndex {
       stems: stems[index],
     );
   }
+
+  static String _normalizeFilterPath(String path) => path.replaceAll('\\', '/');
 }
