@@ -20,8 +20,6 @@ library;
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:ffi/ffi.dart';
 
 // =============================================================================
@@ -30,14 +28,17 @@ import 'package:ffi/ffi.dart';
 
 /// Opaque tree-sitter language object.
 final class TSLanguageStruct extends Opaque {}
+
 typedef TSLanguagePtr = Pointer<TSLanguageStruct>;
 
 /// Opaque tree-sitter parser.
 final class TSParserStruct extends Opaque {}
+
 typedef TSParserPtr = Pointer<TSParserStruct>;
 
 /// Opaque tree-sitter syntax tree.
 final class TSTreeStruct extends Opaque {}
+
 typedef TSTreePtr = Pointer<TSTreeStruct>;
 
 /// UTF-8 encoding constant (the only one we use).
@@ -55,43 +56,24 @@ typedef _TSParserNewDart = TSParserPtr Function();
 typedef _TSParserDeleteC = Void Function(TSParserPtr);
 typedef _TSParserDeleteDart = void Function(TSParserPtr);
 
-/// `bool ts_parser_set_language(TSParser *, const TSLanguage *)` —
-/// note the C function returns `bool` (success/failure), but we
-/// ignore the return value via the void typedef; a false result
-/// (e.g. version mismatch) surfaces as parse returning NULL.
-typedef _TSParserSetLanguageC = Void Function(TSParserPtr, TSLanguagePtr);
-typedef _TSParserSetLanguageDart = void Function(TSParserPtr, TSLanguagePtr);
+/// `bool ts_parser_set_language(TSParser *, const TSLanguage *)`.
+typedef _TSParserSetLanguageC = Bool Function(TSParserPtr, TSLanguagePtr);
+typedef _TSParserSetLanguageDart = bool Function(TSParserPtr, TSLanguagePtr);
 
 /// `TSTree *ts_parser_parse_string_encoding(TSParser *, const TSTree *,
 ///   const char *, uint32_t, TSEncoding)`.
-typedef _TSParseStringEncodingC = TSTreePtr Function(
-  TSParserPtr,
-  TSTreePtr,
-  Pointer<Uint8>,
-  Uint32,
-  Uint32,
-);
-typedef _TSParseStringEncodingDart = TSTreePtr Function(
-  TSParserPtr,
-  TSTreePtr,
-  Pointer<Uint8>,
-  int,
-  int,
-);
+typedef _TSParseStringEncodingC =
+    TSTreePtr Function(TSParserPtr, TSTreePtr, Pointer<Uint8>, Uint32, Uint32);
+typedef _TSParseStringEncodingDart =
+    TSTreePtr Function(TSParserPtr, TSTreePtr, Pointer<Uint8>, int, int);
 
 /// `void ts_tree_delete(TSTree *)`.
 typedef _TSTreeDeleteC = Void Function(TSTreePtr);
 typedef _TSTreeDeleteDart = void Function(TSTreePtr);
 
-/// Tree-sitter's `TSNode` is a 32-byte struct. The C shim layer
-/// (see file header for rationale) wraps all TSNode-accepting
-/// functions to take a pointer instead of a value. Dart passes the
-/// pointer; the shim dereferences and forwards to the real function.
-///
-/// We mirror the full 32-byte layout so that `Pointer<T>.ref` can
-/// return a Dart-side TSNodePayload value (e.g. for inspection in
-/// tests). The struct is never passed *by value* across the FFI
-/// boundary; the C shim absorbs that.
+/// Tree-sitter's `TSNode` is a 32-byte struct. Dart never copies this
+/// value into managed memory; it only passes pointers allocated by the C
+/// shim. The layout is mirrored solely so the pointer has a typed target.
 final class TSNodePayload extends Struct {
   @Uint32()
   external int context0;
@@ -136,20 +118,15 @@ typedef _TSNodeNamedChildCountDart = int Function(Pointer<TSNodePayload>);
 /// dereferences; the returned TSNode is now 32 bytes which we
 /// can't return across FFI. Use `crux_ts_node_child_alloc` instead
 /// (defined in the shim) that returns a pointer.
-typedef _TSNodeChildC = Pointer<TSNodePayload> Function(
-    Pointer<TSNodePayload>, Uint32);
-typedef _TSNodeChildDart = Pointer<TSNodePayload> Function(
-    Pointer<TSNodePayload>, int);
+typedef _TSNodeChildC =
+    Pointer<TSNodePayload> Function(Pointer<TSNodePayload>, Uint32);
+typedef _TSNodeChildDart =
+    Pointer<TSNodePayload> Function(Pointer<TSNodePayload>, int);
 
-typedef _TSNodeNamedChildC = Pointer<TSNodePayload> Function(
-    Pointer<TSNodePayload>, Uint32);
-typedef _TSNodeNamedChildDart = Pointer<TSNodePayload> Function(
-    Pointer<TSNodePayload>, int);
-
-/// `crux_ts_node_child_free` — symmetric of alloc, for freeing
-/// heap-allocated TSNode returned by `crux_ts_node_child_alloc`.
-typedef _TSNodeChildFreeC = Void Function(Pointer<TSNodePayload>);
-typedef _TSNodeChildFreeDart = void Function(Pointer<TSNodePayload>);
+typedef _TSNodeNamedChildC =
+    Pointer<TSNodePayload> Function(Pointer<TSNodePayload>, Uint32);
+typedef _TSNodeNamedChildDart =
+    Pointer<TSNodePayload> Function(Pointer<TSNodePayload>, int);
 
 // =============================================================================
 // High-level wrapper
@@ -175,7 +152,6 @@ class TreeSitter {
   final _TSNodeNamedChildCountDart _nodeNamedChildCount;
   final _TSNodeChildDart _nodeChild;
   final _TSNodeNamedChildDart _nodeNamedChild;
-  final _TSNodeChildFreeDart _nodeChildFree;
 
   final Map<String, TSLanguagePtr> _languages = {};
 
@@ -195,22 +171,20 @@ class TreeSitter {
     required _TSNodeNamedChildCountDart nodeNamedChildCount,
     required _TSNodeChildDart nodeChild,
     required _TSNodeNamedChildDart nodeNamedChild,
-    required _TSNodeChildFreeDart nodeChildFree,
-  })  : _parserNew = parserNew,
-        _parserDelete = parserDelete,
-        _parserSetLanguage = parserSetLanguage,
-        _parse = parse,
-        _treeDelete = treeDelete,
-        _rootNode = rootNode,
-        _rootNodeFree = rootNodeFree,
-        _nodeType = nodeType,
-        _nodeStartByte = nodeStartByte,
-        _nodeEndByte = nodeEndByte,
-        _nodeChildCount = nodeChildCount,
-        _nodeNamedChildCount = nodeNamedChildCount,
-        _nodeChild = nodeChild,
-        _nodeNamedChild = nodeNamedChild,
-        _nodeChildFree = nodeChildFree;
+  }) : _parserNew = parserNew,
+       _parserDelete = parserDelete,
+       _parserSetLanguage = parserSetLanguage,
+       _parse = parse,
+       _treeDelete = treeDelete,
+       _rootNode = rootNode,
+       _rootNodeFree = rootNodeFree,
+       _nodeType = nodeType,
+       _nodeStartByte = nodeStartByte,
+       _nodeEndByte = nodeEndByte,
+       _nodeChildCount = nodeChildCount,
+       _nodeNamedChildCount = nodeNamedChildCount,
+       _nodeChild = nodeChild,
+       _nodeNamedChild = nodeNamedChild;
 
   /// Open the library. [path] should be the absolute path to
   /// `libcrux_grammars.<ext>`. If null, falls back to:
@@ -232,11 +206,13 @@ class TreeSitter {
           .asFunction<_TSParserDeleteDart>(),
       parserSetLanguage: lib
           .lookup<NativeFunction<_TSParserSetLanguageC>>(
-              'ts_parser_set_language')
+            'ts_parser_set_language',
+          )
           .asFunction<_TSParserSetLanguageDart>(),
       parse: lib
           .lookup<NativeFunction<_TSParseStringEncodingC>>(
-              'ts_parser_parse_string_encoding')
+            'ts_parser_parse_string_encoding',
+          )
           .asFunction<_TSParseStringEncodingDart>(),
       treeDelete: lib
           .lookup<NativeFunction<_TSTreeDeleteC>>('ts_tree_delete')
@@ -246,7 +222,8 @@ class TreeSitter {
           .asFunction<_TSRootNodeDart>(),
       rootNodeFree: lib
           .lookup<NativeFunction<_TSRootNodeFreeC>>(
-              'crux_ts_tree_root_node_free')
+            'crux_ts_tree_root_node_free',
+          )
           .asFunction<_TSRootNodeFreeDart>(),
       nodeType: lib
           .lookup<NativeFunction<_TSNodeTypeC>>('crux_ts_node_type')
@@ -259,23 +236,22 @@ class TreeSitter {
           .asFunction<_TSNodeEndByteDart>(),
       nodeChildCount: lib
           .lookup<NativeFunction<_TSNodeChildCountC>>(
-              'crux_ts_node_child_count')
+            'crux_ts_node_child_count',
+          )
           .asFunction<_TSNodeChildCountDart>(),
       nodeNamedChildCount: lib
           .lookup<NativeFunction<_TSNodeNamedChildCountC>>(
-              'crux_ts_node_named_child_count')
+            'crux_ts_node_named_child_count',
+          )
           .asFunction<_TSNodeNamedChildCountDart>(),
       nodeChild: lib
           .lookup<NativeFunction<_TSNodeChildC>>('crux_ts_node_child')
           .asFunction<_TSNodeChildDart>(),
       nodeNamedChild: lib
           .lookup<NativeFunction<_TSNodeNamedChildC>>(
-              'crux_ts_node_named_child')
+            'crux_ts_node_named_child',
+          )
           .asFunction<_TSNodeNamedChildDart>(),
-      nodeChildFree: lib
-          .lookup<NativeFunction<_TSNodeChildFreeC>>(
-              'crux_ts_node_child_free')
-          .asFunction<_TSNodeChildFreeDart>(),
     );
   }
 
@@ -285,8 +261,9 @@ class TreeSitter {
       return DynamicLibrary.open('$env/libcrux_grammars.${_ext()}');
     }
     var dir = Directory.current;
-    for (var i = 0; i < 8 && dir != null; i++) {
-      final p = '${dir.path}/third_party/bin/${_currentTarget()}'
+    for (var i = 0; i < 8; i++) {
+      final p =
+          '${dir.path}/third_party/bin/${_currentTarget()}'
           '/libcrux_grammars.${_ext()}';
       if (File(p).existsSync()) return DynamicLibrary.open(p);
       dir = dir.parent;
@@ -310,8 +287,10 @@ class TreeSitter {
   TSTree parse(String source, {required String language}) {
     final lang = _languages[language];
     if (lang == null) {
-      throw StateError('language not registered: $language '
-          '(call registerLanguage("$language") first)');
+      throw StateError(
+        'language not registered: $language '
+        '(call registerLanguage("$language") first)',
+      );
     }
     final bytes = utf8.encode(source);
     final buf = malloc<Uint8>(bytes.length);
@@ -319,7 +298,10 @@ class TreeSitter {
       buf.asTypedList(bytes.length).setAll(0, bytes);
       final parser = _parserNew();
       try {
-        _parserSetLanguage(parser, lang);
+        final ok = _parserSetLanguage(parser, lang);
+        if (!ok) {
+          throw StateError('tree-sitter rejected language: $language');
+        }
         final treePtr = _parse(
           parser,
           nullptr,
@@ -337,100 +319,57 @@ class TreeSitter {
   }
 
   // ---- TSNode accessors ----
-  //
-  // Each takes a Dart `TSNodePayload` value (32 bytes). The C
-  // shim is called via a `Pointer<TSNodePayload>` argument; we
-  // round-trip through a Dart-malloc'd buffer to pass a real
-  // pointer. (Dart-malloc'd and C-malloc'd memory are interchangeable
-  // on macOS — the heap is the libc heap.)
 
-  String nodeTypeString(TSNodePayload node) {
-    return _callNodeString(node, _nodeType);
+  String nodeTypeString(TSNode node) {
+    node._checkValid();
+    return _nodeType(node._ptr).cast<Utf8>().toDartString();
   }
 
-  int startByte(TSNodePayload node) =>
-      _callNodeInt(node, _nodeStartByte);
+  int startByte(TSNode node) {
+    node._checkValid();
+    return _nodeStartByte(node._ptr);
+  }
 
-  int endByte(TSNodePayload node) =>
-      _callNodeInt(node, _nodeEndByte);
+  int endByte(TSNode node) {
+    node._checkValid();
+    return _nodeEndByte(node._ptr);
+  }
 
-  int childCount(TSNodePayload node) =>
-      _callNodeInt(node, _nodeChildCount);
+  int childCount(TSNode node) {
+    node._checkValid();
+    return _nodeChildCount(node._ptr);
+  }
 
-  int namedChildCount(TSNodePayload node) =>
-      _callNodeInt(node, _nodeNamedChildCount);
+  int namedChildCount(TSNode node) {
+    node._checkValid();
+    return _nodeNamedChildCount(node._ptr);
+  }
 
   /// Returns the i-th named child of [node]. Allocates a fresh
   /// TSNode on the C side (via the child shim) and copies it into
   /// a Dart-side struct value. The allocation is freed before
   /// returning.
-  TSNodePayload namedChildAt(TSNodePayload node, int i) {
-    final inP = malloc<TSNodePayload>();
-    try {
-      inP.ref = node;
-      final outP = _nodeNamedChild(inP, i);
-      try {
-        return outP.ref;
-      } finally {
-        _nodeChildFree(outP);
-      }
-    } finally {
-      malloc.free(inP);
-    }
+  TSNode namedChildAt(TSNode node, int i) {
+    node._checkValid();
+    return node._owner._adoptNode(_nodeNamedChild(node._ptr, i));
   }
 
   /// Returns the i-th child (named or anonymous).
-  TSNodePayload childAt(TSNodePayload node, int i) {
-    final inP = malloc<TSNodePayload>();
-    try {
-      inP.ref = node;
-      final outP = _nodeChild(inP, i);
-      try {
-        return outP.ref;
-      } finally {
-        _nodeChildFree(outP);
-      }
-    } finally {
-      malloc.free(inP);
-    }
+  TSNode childAt(TSNode node, int i) {
+    node._checkValid();
+    return node._owner._adoptNode(_nodeChild(node._ptr, i));
   }
 
   /// Walk a node's named children.
-  List<TSNodePayload> namedChildrenOf(TSNodePayload node) {
+  List<TSNode> namedChildrenOf(TSNode node) {
     final n = namedChildCount(node);
     return [for (var i = 0; i < n; i++) namedChildAt(node, i)];
   }
 
   /// Walk all children (named + anonymous).
-  List<TSNodePayload> allChildrenOf(TSNodePayload node) {
+  List<TSNode> allChildrenOf(TSNode node) {
     final n = childCount(node);
     return [for (var i = 0; i < n; i++) childAt(node, i)];
-  }
-
-  // Internal: round-trip a TSNode through a Dart-malloc'd buffer so
-  // we can pass a pointer to the C shim. Returns the function's
-  // int return. (The buffer is necessary because Dart FFI cannot
-  // pass 32-byte structs by value — see file header.)
-  int _callNodeInt(
-      TSNodePayload node, _TSNodeStartByteDart f) {
-    final p = malloc<TSNodePayload>();
-    try {
-      p.ref = node;
-      return f(p);
-    } finally {
-      malloc.free(p);
-    }
-  }
-
-  String _callNodeString(
-      TSNodePayload node, _TSNodeTypeDart f) {
-    final p = malloc<TSNodePayload>();
-    try {
-      p.ref = node;
-      return f(p).cast<Utf8>().toDartString();
-    } finally {
-      malloc.free(p);
-    }
   }
 
   /// Release resources. Tree-sitter itself doesn't allocate much
@@ -450,6 +389,7 @@ class TSTree {
   final _TSRootNodeFreeDart _rootNodeFree;
   final TSTreePtr _ptr;
   final String source;
+  final List<Pointer<TSNodePayload>> _nodes = [];
 
   bool _closed = false;
 
@@ -463,21 +403,29 @@ class TSTree {
 
   bool get isValid => !_closed && _ptr.address != 0;
 
-  /// Root node of the syntax tree. Allocates a C-side TSNode via
-  /// the shim, reads it into a Dart value via `p.ref`, then frees
-  /// the C allocation. The returned Dart value is a 32-byte copy.
-  TSNodePayload root() {
+  /// Root node of the syntax tree. The returned [TSNode] is an owned
+  /// handle to a C-side `TSNode*`; it remains valid until this tree is
+  /// closed. Dart intentionally never copies the 32-byte struct value.
+  TSNode root() {
     _checkValid();
-    final p = _rootNode(_ptr);
-    try {
-      return p.ref;
-    } finally {
-      _rootNodeFree(p);
+    return _adoptNode(_rootNode(_ptr));
+  }
+
+  TSNode _adoptNode(Pointer<TSNodePayload> ptr) {
+    _checkValid();
+    if (ptr.address == 0) {
+      throw StateError('tree-sitter returned a null TSNode pointer');
     }
+    _nodes.add(ptr);
+    return TSNode._(this, ptr);
   }
 
   void close() {
     if (!_closed) {
+      for (final node in _nodes.reversed) {
+        _rootNodeFree(node);
+      }
+      _nodes.clear();
       _delete(_ptr);
       _closed = true;
     }
@@ -486,6 +434,22 @@ class TSTree {
   void _checkValid() {
     if (_closed) {
       throw StateError('TSTree has been closed');
+    }
+  }
+}
+
+/// Handle to a C-side `TSNode*` owned by a [TSTree].
+class TSNode {
+  final TSTree _owner;
+  final Pointer<TSNodePayload> _ptr;
+
+  TSNode._(this._owner, this._ptr);
+
+  bool get isValid => !_owner._closed && _ptr.address != 0;
+
+  void _checkValid() {
+    if (!isValid) {
+      throw StateError('TSNode is no longer valid');
     }
   }
 }

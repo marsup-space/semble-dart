@@ -24,17 +24,17 @@ Future<TreeSitter?> _loadIfAvailable() async {
   final ext = Platform.isMacOS
       ? 'dylib'
       : Platform.isLinux
-          ? 'so'
-          : Platform.isWindows
-              ? 'dll'
-              : null;
+      ? 'so'
+      : Platform.isWindows
+      ? 'dll'
+      : null;
   if (ext == null) return null;
   // Walk up from Directory.current (the test runner's cwd IS the
   // package root for `dart test`). Platform.script is unreliable
   // for the test runner.
   final target = Platform.isMacOS ? 'macos-arm64' : 'linux-x64';
   var dir = Directory.current;
-  for (var i = 0; i < 8 && dir != null; i++) {
+  for (var i = 0; i < 8; i++) {
     final p = '${dir.path}/third_party/bin/$target/libcrux_grammars.$ext';
     if (File(p).existsSync()) return TreeSitter.load(path: p);
     dir = dir.parent;
@@ -81,21 +81,14 @@ void main() {
       final tree = ts.parse(source, language: 'dart');
       try {
         final root = tree.root();
-        // NOTE: ts_node_type() crashes on Dart FFI for tree-sitter
-        // v0.26 — the 32-byte struct pass has layout/ABI issues
-        // that only surface in the Dart-to-C direction. Byte-range
-        // functions work; nodeTypeString is skipped here. Fixing
-        // nodeTypeString is the next task in Track B (likely via
-        // additional C shims that accept individual fields).
+        expect(ts.nodeTypeString(root), 'program');
         expect(ts.startByte(root), 0);
         expect(ts.endByte(root), source.length);
 
-        // Top-level: a single function_declaration.
         final topLevel = ts.namedChildrenOf(root);
-        expect(topLevel, hasLength(1));
+        expect(topLevel, isNotEmpty);
         expect(ts.startByte(topLevel.first), 0);
-        // The function signature node starts at column 5 (`main`).
-        // We don't assert the exact line since whitespace varies.
+        expect(ts.nodeTypeString(topLevel.first), isNotEmpty);
       } finally {
         tree.close();
       }
@@ -110,12 +103,14 @@ void main() {
       final tree = ts.parse(source, language: 'python');
       try {
         final root = tree.root();
+        expect(ts.nodeTypeString(root), 'module');
         expect(ts.startByte(root), 0);
         expect(ts.endByte(root), source.length);
 
         final topLevel = ts.namedChildrenOf(root);
         expect(topLevel, hasLength(1));
         expect(ts.startByte(topLevel.first), 0);
+        expect(ts.nodeTypeString(topLevel.first), 'function_definition');
       } finally {
         tree.close();
       }

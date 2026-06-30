@@ -9,5 +9,7 @@
 library;
 
 export 'src/protocol.dart' show SearchResult, SembleRequest, SembleResponse;
+export 'src/chunker.dart' show AstChunker, CodeChunk;
 export 'src/treesitter/bindings.dart' show TreeSitter, TSTree;
 export 'src/treesitter/languages.dart' show LanguageRegistry;
+export 'src/treesitter/parser.dart' show ParsedSource, TreeSitterParser;

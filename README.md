@@ -6,7 +6,10 @@ Used by [Crux](https://github.com/marsup-space/crux) as the implementation behin
 
 ## Status
 
-Track A (pure-Dart pieces) in progress. The package is not yet wired into Crux — that happens in Track E.
+Track A (pure-Dart pieces) is complete. Track B has a working macOS-arm64
+tree-sitter native build, Dart FFI bindings, a high-level parser facade, and a
+conservative AST chunker. The package is not yet wired into Crux — that happens
+in Track E.
 
 ## License
 

@@ -128,17 +128,19 @@ uint32_t crux_ts_node_named_child_count(const TSNode *node) {
 }
 
 __attribute__((visibility("default"), used))
-TSNode crux_ts_node_child(const TSNode *node, uint32_t i) {
+TSNode *crux_ts_node_child(const TSNode *node, uint32_t i) {
   extern TSNode ts_node_child(TSNode, uint32_t);
-  // ts_node_child returns TSNode by value. Allocate on heap so
-  // Dart can read it via p.ref.
-  return ts_node_child(*node, i);
+  TSNode *out = (TSNode *) malloc(sizeof(TSNode));
+  *out = ts_node_child(*node, i);
+  return out;
 }
 
 __attribute__((visibility("default"), used))
-TSNode crux_ts_node_named_child(const TSNode *node, uint32_t i) {
+TSNode *crux_ts_node_named_child(const TSNode *node, uint32_t i) {
   extern TSNode ts_node_named_child(TSNode, uint32_t);
-  return ts_node_named_child(*node, i);
+  TSNode *out = (TSNode *) malloc(sizeof(TSNode));
+  *out = ts_node_named_child(*node, i);
+  return out;
 }
 
 __attribute__((visibility("default"), used))

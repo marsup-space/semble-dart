@@ -13,8 +13,16 @@ build/
 .DS_Store
 
 # Native build artifacts (produced by tool/build_native.dart in Track B)
+.build/
+.build.log
 *.o
 *.so
 *.dylib
 *.dll
 grammars-src/
+
+# Local Track B diagnostics
+.c_smoke_test
+.c_smoke_test.c
+.ffi_test2.dart
+.run_*.sh
