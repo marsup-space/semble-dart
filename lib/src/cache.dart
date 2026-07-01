@@ -9,6 +9,12 @@ import 'chunker.dart';
 class SembleCache {
   final Directory directory;
 
+  /// Chunker algorithm version. Bump this when the chunker algorithm
+  /// changes in a way that produces different chunks for the same source.
+  /// This invalidates all existing cache entries so they get re-chunked
+  /// with the new algorithm.
+  static const int chunkerVersion = 2;
+
   SembleCache(String path)
     : directory = Directory(p.normalize(p.absolute(path)));
 
@@ -23,7 +29,8 @@ class SembleCache {
     final stat = await source.stat();
     if (json['path'] != source.path ||
         json['mtime_ms'] != stat.modified.millisecondsSinceEpoch ||
-        json['size'] != stat.size) {
+        json['size'] != stat.size ||
+        json['chunker_version'] != chunkerVersion) {
       return null;
     }
 
@@ -40,6 +47,7 @@ class SembleCache {
     final stat = await source.stat();
     final json = <String, Object?>{
       'version': 1,
+      'chunker_version': chunkerVersion,
       'path': source.path,
       'mtime_ms': stat.modified.millisecondsSinceEpoch,
       'size': stat.size,

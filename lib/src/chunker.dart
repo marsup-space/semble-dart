@@ -65,6 +65,12 @@ class AstChunker {
   static const int defaultDesiredChunkBytes = 750;
   static const int minRecursiveChunkBytes = 50;
   static const int maxRecursionDepth = 500;
+  /// Hard upper cap on chunk size in bytes. When a node exceeds this and
+  /// cannot be split further by the AST recursion, it is split along line
+  /// boundaries. This prevents degenerate mega-chunks (e.g., a 1360-line
+  /// class) from being emitted as a single result, which bloats context
+  /// and degrades search quality.
+  static const int hardMaxChunkBytes = 2000;
 
   final TreeSitter treeSitter;
   final int desiredChunkBytes;
@@ -79,7 +85,9 @@ class AstChunker {
 
     final root = parsed.root();
     final ranges = _mergeNode(root, 0);
-    return [for (final range in ranges) _chunkForRange(parsed, range)];
+    // Enforce hard cap using source text for line-boundary splits.
+    final bounded = _enforceHardCap(ranges, parsed.source);
+    return [for (final range in bounded) _chunkForRange(parsed, range)];
   }
 
   bool _hasContent(TSNode node) =>
@@ -158,6 +166,103 @@ class AstChunker {
     }
     merged.add(current);
     return merged;
+  }
+
+  /// Enforce [hardMaxChunkBytes] on the final chunk list. Any chunk that
+  /// exceeds the cap is split along line boundaries in the source text.
+  List<_NodeRange> _enforceHardCap(List<_NodeRange> chunks, String source) {
+    final result = <_NodeRange>[];
+    for (final chunk in chunks) {
+      if (chunk.length <= hardMaxChunkBytes) {
+        result.add(chunk);
+      } else {
+        result.addAll(_splitByLines(chunk, source));
+      }
+    }
+    return result;
+  }
+
+  /// Split a large [_NodeRange] into smaller chunks along line boundaries.
+  /// Uses the source text to find newline positions so splits happen at
+  /// line boundaries rather than mid-line.
+  List<_NodeRange> _splitByLines(_NodeRange range, String source) {
+    final result = <_NodeRange>[];
+    var currentStart = range.startByte;
+
+    while (currentStart < range.endByte) {
+      final remaining = range.endByte - currentStart;
+      if (remaining <= hardMaxChunkBytes) {
+        // Fits within the cap — emit as-is.
+        result.add(_NodeRange(
+          startByte: currentStart,
+          endByte: range.endByte,
+          nodeType: range.nodeType,
+        ));
+        break;
+      }
+
+      // Target end is currentStart + hardMaxChunkBytes, but we want to
+      // find the nearest line boundary before that.
+      final targetEnd = currentStart + hardMaxChunkBytes;
+      final lineEnd = _findLineBoundary(source, currentStart, targetEnd, range.endByte);
+      result.add(_NodeRange(
+        startByte: currentStart,
+        endByte: lineEnd,
+        nodeType: range.nodeType,
+      ));
+      currentStart = lineEnd;
+    }
+    return result;
+  }
+
+  /// Find the nearest newline byte offset at or before [targetEnd],
+  /// searching backward from [targetEnd] to [minStart]. If no newline is
+  /// found within the search window, returns [targetEnd] (split mid-line
+  /// is acceptable as a last resort).
+  int _findLineBoundary(String source, int minStart, int targetEnd, int maxEnd) {
+    // Clamp to valid range.
+    final clampedTarget = targetEnd.clamp(minStart, maxEnd);
+    // Search backward for a newline (0x0a). Newline is always a single
+    // byte in UTF-8 and cannot appear as a continuation byte, so a
+    // byte-level search is safe.
+    const maxLookback = 300;
+    final searchStart = (clampedTarget - maxLookback).clamp(minStart, maxEnd);
+    for (var i = clampedTarget - 1; i >= searchStart; i--) {
+      // Convert byte offset to char offset to read the source.
+      // For ASCII (including newline), byte offset == char offset.
+      // For non-ASCII, we need to be careful — but newline is ASCII.
+      if (i < source.length && source.codeUnitAt(_byteToCharOffset(source, i)) == 0x0a) {
+        // Return the byte offset of the newline + 1 (start of next line).
+        return i + 1;
+      }
+    }
+    // No newline found — split at target.
+    return clampedTarget;
+  }
+
+  /// Convert a byte offset to a char offset. For ASCII text this is the
+  /// identity. For non-ASCII text, we walk the source to find the char
+  /// index corresponding to the byte offset.
+  static int _byteToCharOffset(String source, int byteOffset) {
+    if (byteOffset <= 0) return 0;
+    var bytesSeen = 0;
+    for (var i = 0; i < source.length; i++) {
+      final c = source.codeUnitAt(i);
+      int utf8Len;
+      if (c < 0x80) {
+        utf8Len = 1;
+      } else if (c < 0x800) {
+        utf8Len = 2;
+      } else if (c >= 0xD800 && c <= 0xDBFF) {
+        utf8Len = 4;
+        i++;
+      } else {
+        utf8Len = 3;
+      }
+      if (bytesSeen + utf8Len > byteOffset) return i;
+      bytesSeen += utf8Len;
+    }
+    return source.length;
   }
 
   CodeChunk _chunkForRange(ParsedSource parsed, _NodeRange range) {

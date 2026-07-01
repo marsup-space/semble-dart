@@ -195,4 +195,104 @@ class Runner:
       parsed.close();
     }
   });
+
+  test('hard cap splits oversized chunks along line boundaries', () {
+    // Regression test: a large file that the AST recursion cannot
+    // break up (e.g., a single long function) must be split by the
+    // hard cap, not emitted as a single mega-chunk.
+    if (!available) {
+      markTestSkipped(_skipMessage);
+      return;
+    }
+    final defaultChunker = AstChunker(treeSitter: ts);
+    // Generate a Python file with a single long function (no AST
+    // structure to split on beyond the statement level).
+    final buffer = StringBuffer();
+    buffer.writeln('def long_function():');
+    for (var i = 0; i < 200; i++) {
+      buffer.writeln('    x = $i + 1  # line ${i + 2}');
+    }
+    final source = buffer.toString();
+    final parsed = parser.parseSource(path: 'lib/long.py', source: source);
+    try {
+      final chunks = defaultChunker.chunk(parsed);
+      expect(chunks, isNotEmpty);
+      // Every chunk must be within the hard cap.
+      for (final chunk in chunks) {
+        expect(chunk.endByte - chunk.startByte,
+            lessThanOrEqualTo(AstChunker.hardMaxChunkBytes),
+            reason: 'chunk ${chunk.startLine}-${chunk.endLine} exceeds hard cap');
+      }
+      // There must be more than one chunk (the file is ~6000 bytes,
+      // hard cap is 2000 bytes).
+      expect(chunks.length, greaterThan(1));
+      // Chunks must cover the full file without gaps or overlaps.
+      expect(chunks.first.startLine, 1);
+      expect(chunks.last.endLine, 201); // 200 lines + def line
+      for (var i = 1; i < chunks.length; i++) {
+        expect(chunks[i].startLine,
+            greaterThanOrEqualTo(chunks[i - 1].endLine),
+            reason: 'chunks must not overlap');
+      }
+    } finally {
+      parsed.close();
+    }
+  });
+
+  test('hard cap does not affect small files', () {
+    // Files under the hard cap should be chunked normally.
+    if (!available) {
+      markTestSkipped(_skipMessage);
+      return;
+    }
+    final defaultChunker = AstChunker(treeSitter: ts);
+    const source = 'def a():\n    pass\n\ndef b():\n    pass\n';
+    final parsed = parser.parseSource(path: 'lib/small.py', source: source);
+    try {
+      final chunks = defaultChunker.chunk(parsed);
+      expect(chunks, isNotEmpty);
+      // All chunks should be under the hard cap.
+      for (final chunk in chunks) {
+        expect(chunk.endByte - chunk.startByte,
+            lessThanOrEqualTo(AstChunker.hardMaxChunkBytes));
+      }
+    } finally {
+      parsed.close();
+    }
+  });
+
+  test('hard cap splits a large Dart class into multiple chunks', () {
+    // A large Dart class (similar to ChatTurnOrchestrator) should be
+    // split into multiple chunks, not emitted as a single mega-chunk.
+    if (!available) {
+      markTestSkipped(_skipMessage);
+      return;
+    }
+    final defaultChunker = AstChunker(treeSitter: ts);
+    final buffer = StringBuffer();
+    buffer.writeln('class LargeClass {');
+    for (var i = 0; i < 300; i++) {
+      buffer.writeln('  void method$i() { print($i); }');
+    }
+    buffer.writeln('}');
+    final source = buffer.toString();
+    final parsed = parser.parseSource(path: 'lib/large.dart', source: source);
+    try {
+      final chunks = defaultChunker.chunk(parsed);
+      expect(chunks, isNotEmpty);
+      // Every chunk must be within the hard cap.
+      for (final chunk in chunks) {
+        expect(chunk.endByte - chunk.startByte,
+            lessThanOrEqualTo(AstChunker.hardMaxChunkBytes),
+            reason: 'chunk ${chunk.startLine}-${chunk.endLine} exceeds hard cap');
+      }
+      // Must be multiple chunks.
+      expect(chunks.length, greaterThan(1));
+      // First chunk starts at line 1, last chunk ends at the closing brace.
+      expect(chunks.first.startLine, 1);
+      expect(chunks.last.endLine, 302); // 300 methods + class + }
+    } finally {
+      parsed.close();
+    }
+  });
 }
