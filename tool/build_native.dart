@@ -166,7 +166,12 @@ Future<int> main(List<String> args) async {
     final ok = await _buildTarget(target);
     if (!ok) {
       stderr.writeln('build failed for $target');
-      return 1;
+      // `dart run` does NOT propagate the exit code from
+      // main()'s return value — it always exits 0. Call
+      // `exit(1)` directly so CI shells (and local
+      // `./release.sh`) see the failure. Without this, a
+      // failed build silently reports success.
+      exit(1);
     }
   }
   return 0;
