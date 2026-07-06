@@ -116,7 +116,7 @@ class _SembleSearchServer {
       rootPath: root,
       parser: parser,
       chunker: chunker,
-      cache: SembleCache(p.join(root, '.dart_tool', 'semble_cache')),
+      cache: SembleCache(p.join(root, '.crux', 'semble_cache')),
       model: _model,
       tokenizer: _tokenizer,
     );
