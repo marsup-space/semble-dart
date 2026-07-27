@@ -7,6 +7,7 @@ import 'files.dart';
 class SembleFileWalker {
   static const Set<String> defaultIgnoredDirectories = {
     '.git',
+    '.cache',
     '.dart_tool',
     '.idea',
     '.vscode',

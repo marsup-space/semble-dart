@@ -116,12 +116,11 @@ class _SembleSearchServer {
       rootPath: root,
       parser: parser,
       chunker: chunker,
-      // `.dart_tool` is universally gitignored across Dart/Flutter
-      // projects, and SembleFileWalker already skips it — so the
-      // cache stays inside the project (per-project isolation, dies
-      // with the checkout) without dirtying git status or being
-      // re-indexed.
-      cache: SembleCache(p.join(root, '.dart_tool', 'crux', 'semble_cache')),
+      // Per-project cache under <root>/.cache/semble. `.cache` is not
+      // a universal gitignore entry, but SembleFileWalker skips it
+      // (see defaultIgnoredDirectories) so the indexer never walks its
+      // own cache, and host projects can ignore it with one line.
+      cache: SembleCache(p.join(root, '.cache', 'semble')),
       model: _model,
       tokenizer: _tokenizer,
     );
