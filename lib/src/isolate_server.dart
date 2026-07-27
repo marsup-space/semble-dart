@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import 'cache.dart';
@@ -116,12 +117,35 @@ class _SembleSearchServer {
       rootPath: root,
       parser: parser,
       chunker: chunker,
-      cache: SembleCache(p.join(root, '.crux', 'semble_cache')),
+      cache: SembleCache(_cacheDirForRoot(root)),
       model: _model,
       tokenizer: _tokenizer,
     );
     _indexes[root] = index;
     return index;
+  }
+
+  /// Per-project on-disk cache home, kept OUTSIDE the indexed tree so
+  /// the cache never pollutes the project's `git status`.
+  ///
+  /// Layout mirrors Crux's LSP tool home (`lib/src/lsp/installer.dart`):
+  /// `$XDG_CACHE_HOME/crux/semble/<sha1-of-abs-root>/` (falling back to
+  /// `~/.cache`, or the system temp dir when no home is resolvable).
+  /// Keying by the absolute root path keeps caches machine-local and
+  /// collision-free across projects; chunk payloads stay repo-relative
+  /// (see `SembleIndex.fromPath`), so a moved project simply re-warms
+  /// into a fresh bucket.
+  static String _cacheDirForRoot(String root) {
+    final xdg = Platform.environment['XDG_CACHE_HOME'];
+    final home =
+        Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+    final base = (xdg != null && xdg.isNotEmpty)
+        ? xdg
+        : (home != null && home.isNotEmpty)
+        ? p.join(home, '.cache')
+        : Directory.systemTemp.path;
+    final bucket = sha1.convert(utf8.encode(root)).toString();
+    return p.join(base, 'crux', 'semble', bucket);
   }
 
   Future<void> _handlePrewarm(PrewarmReq req) async {
