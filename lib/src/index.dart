@@ -58,9 +58,7 @@ class SembleIndex {
 
       final cached = await cache?.readChunks(path);
       if (cached != null) {
-        chunks.addAll(
-          cached.map((c) => c.copyWith(filePath: displayPath)),
-        );
+        chunks.addAll(cached.map((c) => c.copyWith(filePath: displayPath)));
         continue;
       }
 

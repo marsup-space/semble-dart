@@ -44,10 +44,7 @@ void main() {
         content: 'def foo(): pass',
         filePath: 'src/semble/chunking/chunking.py',
       );
-      expect(
-        out,
-        'def foo(): pass chunking chunking src semble chunking',
-      );
+      expect(out, 'def foo(): pass chunking chunking src semble chunking');
     });
 
     test('top-level file (no dirs) → stem only, with trailing space', () {
@@ -57,18 +54,12 @@ void main() {
       // produces no extra token — so the trailing space is
       // harmless. The parity tests below confirm Python emits
       // the same.
-      final out = enrichForBm25(
-        content: 'print(1)',
-        filePath: 'README.md',
-      );
+      final out = enrichForBm25(content: 'print(1)', filePath: 'README.md');
       expect(out, 'print(1) README README ');
     });
 
     test('empty content → still gets path tokens', () {
-      final out = enrichForBm25(
-        content: '',
-        filePath: 'src/cache.py',
-      );
+      final out = enrichForBm25(content: '', filePath: 'src/cache.py');
       expect(out, ' cache cache src');
     });
 
@@ -78,26 +69,17 @@ void main() {
     });
 
     test('file with no extension → whole filename as stem', () {
-      final out = enrichForBm25(
-        content: 'x',
-        filePath: 'src/Makefile',
-      );
+      final out = enrichForBm25(content: 'x', filePath: 'src/Makefile');
       expect(out, 'x Makefile Makefile src');
     });
 
     test('filePath that is just a filename', () {
-      final out = enrichForBm25(
-        content: 'y',
-        filePath: 'chunking.py',
-      );
+      final out = enrichForBm25(content: 'y', filePath: 'chunking.py');
       expect(out, 'y chunking chunking ');
     });
 
     test('deep path → only last 3 dir components', () {
-      final out = enrichForBm25(
-        content: 'q',
-        filePath: 'a/b/c/d/e/file.py',
-      );
+      final out = enrichForBm25(content: 'q', filePath: 'a/b/c/d/e/file.py');
       // Last 3 dirs: c, d, e
       expect(out, 'q file file c d e');
     });

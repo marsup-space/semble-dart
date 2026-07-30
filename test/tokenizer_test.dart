@@ -28,15 +28,8 @@ Map<String, dynamic> _tokenizerJson(
     addedList.add({'content': t, 'id': id});
   }
   return {
-    'model': {
-      'type': 'WordPiece',
-      'unk_token': '[UNK]',
-      'vocab': vocab,
-    },
-    'pre_tokenizer': {
-      'type': 'BertPreTokenizer',
-      'do_lower_case': doLower,
-    },
+    'model': {'type': 'WordPiece', 'unk_token': '[UNK]', 'vocab': vocab},
+    'pre_tokenizer': {'type': 'BertPreTokenizer', 'do_lower_case': doLower},
     'added_tokens': addedList,
   };
 }
@@ -44,10 +37,12 @@ Map<String, dynamic> _tokenizerJson(
 void main() {
   group('WordPieceTokenizer.fromJson', () {
     test('parses minimal vocab + unk_token', () {
-      final t = WordPieceTokenizer.fromJson(_tokenizerJson(
-        ['[PAD]', '[UNK]', '[CLS]', '[SEP]', 'hello', 'world'],
-        added: ['[PAD]', '[UNK]', '[CLS]', '[SEP]'],
-      ));
+      final t = WordPieceTokenizer.fromJson(
+        _tokenizerJson(
+          ['[PAD]', '[UNK]', '[CLS]', '[SEP]', 'hello', 'world'],
+          added: ['[PAD]', '[UNK]', '[CLS]', '[SEP]'],
+        ),
+      );
       expect(t.vocab['hello'], 4);
       expect(t.vocab['world'], 5);
       expect(t.special.unkToken, '[UNK]');
@@ -82,10 +77,9 @@ void main() {
     });
 
     test('respects do_lower_case from pre_tokenizer', () {
-      final t = WordPieceTokenizer.fromJson(_tokenizerJson(
-        ['[UNK]', 'hello'],
-        doLower: true,
-      ));
+      final t = WordPieceTokenizer.fromJson(
+        _tokenizerJson(['[UNK]', 'hello'], doLower: true),
+      );
       expect(t.doLowerCase, isTrue);
       // 'Hello' → pretokenize → 'Hello' (case preserved in pretok pass)
       // → WordPiece lookup 'Hello' (not in vocab) → try lowercased via
@@ -94,9 +88,7 @@ void main() {
     });
 
     test('preserves case when do_lower_case=false', () {
-      final t = WordPieceTokenizer.fromJson(_tokenizerJson(
-        ['[UNK]', 'hello'],
-      ));
+      final t = WordPieceTokenizer.fromJson(_tokenizerJson(['[UNK]', 'hello']));
       expect(t.doLowerCase, isFalse);
       expect(t.tokenize('Hello'), [0]); // [UNK]
       expect(t.tokenize('hello'), [1]);
@@ -126,12 +118,25 @@ void main() {
       // - subword decomposition (##ing, ##ed, ##s)
       // - punctuation isolation
       // - [UNK] fallback for words with no decomposable path
-      t = WordPieceTokenizer.fromJson(_tokenizerJson([
-        '[PAD]', '[UNK]', '[CLS]', '[SEP]',
-        'hello', 'world', '##ing', '##ed', '##s',
-        'un', '##able',
-        '.', ',', '!', '?',
-      ]));
+      t = WordPieceTokenizer.fromJson(
+        _tokenizerJson([
+          '[PAD]',
+          '[UNK]',
+          '[CLS]',
+          '[SEP]',
+          'hello',
+          'world',
+          '##ing',
+          '##ed',
+          '##s',
+          'un',
+          '##able',
+          '.',
+          ',',
+          '!',
+          '?',
+        ]),
+      );
     });
 
     test('in-vocab word returns its id', () {
@@ -220,9 +225,9 @@ void main() {
 
   group('SpecialTokens', () {
     test('only UNK when CLS/SEP/PAD absent from added_tokens', () {
-      final t = WordPieceTokenizer.fromJson(_tokenizerJson(
-        ['[UNK]', 'a', 'b'],
-      ));
+      final t = WordPieceTokenizer.fromJson(
+        _tokenizerJson(['[UNK]', 'a', 'b']),
+      );
       expect(t.special.unkId, 0);
       expect(t.special.clsToken, isNull);
       expect(t.special.clsId, isNull);
@@ -231,10 +236,12 @@ void main() {
     });
 
     test('all four specials discovered via added_tokens', () {
-      final t = WordPieceTokenizer.fromJson(_tokenizerJson(
-        ['[PAD]', '[UNK]', '[CLS]', '[SEP]', 'a'],
-        added: ['[PAD]', '[UNK]', '[CLS]', '[SEP]'],
-      ));
+      final t = WordPieceTokenizer.fromJson(
+        _tokenizerJson(
+          ['[PAD]', '[UNK]', '[CLS]', '[SEP]', 'a'],
+          added: ['[PAD]', '[UNK]', '[CLS]', '[SEP]'],
+        ),
+      );
       expect(t.special.padId, 0);
       expect(t.special.unkId, 1);
       expect(t.special.clsId, 2);

@@ -81,8 +81,10 @@ class LanguageRegistry {
   static String require(String pathOrExt) {
     final r = resolve(pathOrExt);
     if (r == null) {
-      throw ArgumentError('unsupported file type: $pathOrExt '
-          '(supported: ${_byExtension.keys.join(", ")})');
+      throw ArgumentError(
+        'unsupported file type: $pathOrExt '
+        '(supported: ${_byExtension.keys.join(", ")})',
+      );
     }
     return r;
   }

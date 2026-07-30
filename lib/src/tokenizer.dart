@@ -107,7 +107,8 @@ class WordPieceTokenizer {
       throw ArgumentError('vocab missing unk_token "$unkToken"');
     }
 
-    final addedTokens = (json['added_tokens'] as List<dynamic>?)
+    final addedTokens =
+        (json['added_tokens'] as List<dynamic>?)
             ?.cast<Map<String, dynamic>>() ??
         const [];
     String? cls;

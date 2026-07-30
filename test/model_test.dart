@@ -83,8 +83,8 @@ void main() {
         },
       };
       final headerBytes = utf8.encode(jsonEncode(headerJson));
-      final lengthBytes =
-          ByteData(8)..setUint64(0, headerBytes.length, Endian.little);
+      final lengthBytes = ByteData(8)
+        ..setUint64(0, headerBytes.length, Endian.little);
       final data = Uint8List(8); // 4 F16 = 8 bytes
       final out = BytesBuilder()
         ..add(lengthBytes.buffer.asUint8List())
@@ -105,8 +105,8 @@ void main() {
         },
       };
       final headerBytes = utf8.encode(jsonEncode(headerJson));
-      final lengthBytes =
-          ByteData(8)..setUint64(0, headerBytes.length, Endian.little);
+      final lengthBytes = ByteData(8)
+        ..setUint64(0, headerBytes.length, Endian.little);
       final data = Uint8List(16);
       final out = BytesBuilder()
         ..add(lengthBytes.buffer.asUint8List())
@@ -128,8 +128,8 @@ void main() {
         },
       };
       final headerBytes = utf8.encode(jsonEncode(headerJson));
-      final lengthBytes =
-          ByteData(8)..setUint64(0, headerBytes.length, Endian.little);
+      final lengthBytes = ByteData(8)
+        ..setUint64(0, headerBytes.length, Endian.little);
       final data = Uint8List(8); // only 8 bytes, not 16
       final out = BytesBuilder()
         ..add(lengthBytes.buffer.asUint8List())
@@ -142,8 +142,7 @@ void main() {
     });
 
     test('rejects buffer too short for header length', () {
-      final lengthBytes =
-          ByteData(8)..setUint64(0, 9999, Endian.little);
+      final lengthBytes = ByteData(8)..setUint64(0, 9999, Endian.little);
       final out = BytesBuilder()
         ..add(lengthBytes.buffer.asUint8List())
         ..add(Uint8List(10));
@@ -164,8 +163,8 @@ void main() {
         },
       };
       final headerBytes = utf8.encode(jsonEncode(headerJson));
-      final lengthBytes =
-          ByteData(8)..setUint64(0, headerBytes.length, Endian.little);
+      final lengthBytes = ByteData(8)
+        ..setUint64(0, headerBytes.length, Endian.little);
       final data = Float32List.fromList([42.0, 43.0]);
       final out = BytesBuilder()
         ..add(lengthBytes.buffer.asUint8List())
@@ -204,15 +203,16 @@ void main() {
         },
       };
       final headerBytes = utf8.encode(jsonEncode(headerJson));
-      final lengthBytes =
-          ByteData(8)..setUint64(0, headerBytes.length, Endian.little);
+      final lengthBytes = ByteData(8)
+        ..setUint64(0, headerBytes.length, Endian.little);
       // padding 64 bytes (32 + 32) then two F32x4 tensors (16+16).
       final data = BytesBuilder()
         ..add(Uint8List(32)) // mapping
         ..add(Float64List(4).buffer.asUint8List()) // weights
         ..add(Float32List.fromList([1.0, 2.0, 3.0, 4.0]).buffer.asUint8List())
-        ..add(Float32List.fromList([99.0, 98.0, 97.0, 96.0])
-            .buffer.asUint8List());
+        ..add(
+          Float32List.fromList([99.0, 98.0, 97.0, 96.0]).buffer.asUint8List(),
+        );
       final out = BytesBuilder()
         ..add(lengthBytes.buffer.asUint8List())
         ..add(headerBytes)
@@ -222,8 +222,7 @@ void main() {
       expect(m.row(1), [97.0, 96.0]);
     });
 
-    test('falls back to first 2D F32 tensor when no "embeddings" entry',
-        () {
+    test('falls back to first 2D F32 tensor when no "embeddings" entry', () {
       // For non-model2vec safetensors files that have a single
       // differently-named F32 2D tensor, the loader should still
       // pick it up rather than reject the file.
@@ -235,8 +234,8 @@ void main() {
         },
       };
       final headerBytes = utf8.encode(jsonEncode(headerJson));
-      final lengthBytes =
-          ByteData(8)..setUint64(0, headerBytes.length, Endian.little);
+      final lengthBytes = ByteData(8)
+        ..setUint64(0, headerBytes.length, Endian.little);
       final data = Float32List.fromList([7.0, 8.0]);
       final out = BytesBuilder()
         ..add(lengthBytes.buffer.asUint8List())
@@ -263,8 +262,8 @@ void main() {
         },
       };
       final headerBytes = utf8.encode(jsonEncode(headerJson));
-      final lengthBytes =
-          ByteData(8)..setUint64(0, headerBytes.length, Endian.little);
+      final lengthBytes = ByteData(8)
+        ..setUint64(0, headerBytes.length, Endian.little);
       final data = BytesBuilder()
         ..add(Uint8List(32))
         ..add(Float64List(4).buffer.asUint8List());
@@ -283,11 +282,13 @@ void main() {
     late EmbeddingModel m;
 
     setUp(() {
-      m = EmbeddingModel.fromBytes(_makeSafetensors([
-        [1.0, 0.0],
-        [0.0, 1.0],
-        [1.0, 1.0],
-      ]));
+      m = EmbeddingModel.fromBytes(
+        _makeSafetensors([
+          [1.0, 0.0],
+          [0.0, 1.0],
+          [1.0, 1.0],
+        ]),
+      );
     });
 
     test('returns row for in-range token', () {
@@ -314,12 +315,14 @@ void main() {
       //   row 1 = [0, 0]    (zero — will be skipped via out-of-range)
       //   row 2 = [1, 0]    (norm 1)
       //   row 3 = [0, 2]    (norm 2)
-      m = EmbeddingModel.fromBytes(_makeSafetensors([
-        [3.0, 4.0],
-        [0.0, 0.0],
-        [1.0, 0.0],
-        [0.0, 2.0],
-      ]));
+      m = EmbeddingModel.fromBytes(
+        _makeSafetensors([
+          [3.0, 4.0],
+          [0.0, 0.0],
+          [1.0, 0.0],
+          [0.0, 2.0],
+        ]),
+      );
     });
 
     test('single token returns L2-normalized row', () {

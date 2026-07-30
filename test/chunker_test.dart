@@ -120,7 +120,8 @@ class Runner:
     // Use a 750-byte chunker (production default) so a ~130-byte
     // file fits in a single chunk and we can assert exact boundaries.
     final bigChunker = AstChunker(treeSitter: ts);
-    const source = 'def _rrf_scores(scores):\n'
+    const source =
+        'def _rrf_scores(scores):\n'
         '    """Convert raw scores to RRF scores 1/(k + rank); '
         'higher raw score → rank 1."""\n'
         '    if not scores:\n'
@@ -143,8 +144,7 @@ class Runner:
     }
   });
 
-  test('chunks Python source with multi-byte CJK identifiers correctly',
-      () {
+  test('chunks Python source with multi-byte CJK identifiers correctly', () {
     // Identifiers containing CJK characters are multi-byte in UTF-8
     // (3 bytes per CJK char). The chunker must slice on char
     // boundaries, not byte boundaries, so the CJK chars are not
@@ -154,7 +154,8 @@ class Runner:
       return;
     }
     final bigChunker = AstChunker(treeSitter: ts);
-    const source = 'def 配置_解析(配置):\n'
+    const source =
+        'def 配置_解析(配置):\n'
         '    """解析配置 → 返回字典"""\n'
         '    return {"ok": True}\n';
     final parsed = parser.parseSource(path: 'lib/cfg.py', source: source);

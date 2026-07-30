@@ -39,12 +39,12 @@ class SearchResult {
   });
 
   Map<String, Object?> toJson() => {
-        'file_path': filePath,
-        'start_line': startLine,
-        'end_line': endLine,
-        'score': score,
-        'content': content,
-      };
+    'file_path': filePath,
+    'start_line': startLine,
+    'end_line': endLine,
+    'score': score,
+    'content': content,
+  };
 
   @override
   String toString() =>

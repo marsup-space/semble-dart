@@ -5,18 +5,33 @@ void main() {
   group('BM25Index constructor', () {
     test('argument validation: k1 must be >= 0', () {
       expect(
-        () => BM25Index(documents: const [['a']], k1: -0.1),
+        () => BM25Index(
+          documents: const [
+            ['a'],
+          ],
+          k1: -0.1,
+        ),
         throwsArgumentError,
       );
     });
 
     test('argument validation: b must be in [0, 1]', () {
       expect(
-        () => BM25Index(documents: const [['a']], b: -0.1),
+        () => BM25Index(
+          documents: const [
+            ['a'],
+          ],
+          b: -0.1,
+        ),
         throwsArgumentError,
       );
       expect(
-        () => BM25Index(documents: const [['a']], b: 1.5),
+        () => BM25Index(
+          documents: const [
+            ['a'],
+          ],
+          b: 1.5,
+        ),
         throwsArgumentError,
       );
     });
@@ -38,12 +53,14 @@ void main() {
       //   doc 1: ["parse", "json", "config"]    (3 tokens, partial)
       //   doc 2: ["render", "html"]             (2 tokens, no match)
       //   doc 3: ["config", "parser"]           (2 tokens, partial)
-      idx = BM25Index(documents: const [
-        ['parse', 'config'],
-        ['parse', 'json', 'config'],
-        ['render', 'html'],
-        ['config', 'parser'],
-      ]);
+      idx = BM25Index(
+        documents: const [
+          ['parse', 'config'],
+          ['parse', 'json', 'config'],
+          ['render', 'html'],
+          ['config', 'parser'],
+        ],
+      );
     });
 
     test('doc matching all query terms scores > 0', () {
@@ -60,14 +77,8 @@ void main() {
     });
 
     test('RangeError for out-of-range doc index', () {
-      expect(
-        () => idx.scoreDoc(-1, ['parse']),
-        throwsRangeError,
-      );
-      expect(
-        () => idx.scoreDoc(99, ['parse']),
-        throwsRangeError,
-      );
+      expect(() => idx.scoreDoc(-1, ['parse']), throwsRangeError);
+      expect(() => idx.scoreDoc(99, ['parse']), throwsRangeError);
     });
 
     test('repeated query terms count once per term', () {
@@ -87,10 +98,13 @@ void main() {
     });
 
     test('b=0 disables length normalization', () {
-      final flat = BM25Index(documents: const [
-        ['parse', 'config'],
-        ['parse', 'json', 'config'],
-      ], b: 0);
+      final flat = BM25Index(
+        documents: const [
+          ['parse', 'config'],
+          ['parse', 'json', 'config'],
+        ],
+        b: 0,
+      );
       // Without length normalization, the per-term contributions are
       // identical, so scores are identical too.
       expect(
@@ -100,21 +114,27 @@ void main() {
     });
 
     test('b=1 maximizes length normalization', () {
-      final flat = BM25Index(documents: const [
-        ['parse', 'config'],
-        ['parse', 'json', 'config'],
-      ], b: 1);
+      final flat = BM25Index(
+        documents: const [
+          ['parse', 'config'],
+          ['parse', 'json', 'config'],
+        ],
+        b: 1,
+      );
       // With b=1, doc 1 is even more heavily penalized than default.
       final s0 = flat.scoreDoc(0, ['parse', 'config']);
       final s1 = flat.scoreDoc(1, ['parse', 'config']);
       expect(s0, greaterThan(s1));
       // And the gap widens vs the default-b case:
-      final def = BM25Index(documents: const [
-        ['parse', 'config'],
-        ['parse', 'json', 'config'],
-      ]);
+      final def = BM25Index(
+        documents: const [
+          ['parse', 'config'],
+          ['parse', 'json', 'config'],
+        ],
+      );
       final gap1 = s0 - s1;
-      final gap2 = def.scoreDoc(0, ['parse', 'config']) -
+      final gap2 =
+          def.scoreDoc(0, ['parse', 'config']) -
           def.scoreDoc(1, ['parse', 'config']);
       expect(gap1, greaterThan(gap2));
     });
@@ -123,10 +143,13 @@ void main() {
       // In a corpus where "parse" appears 3 times in doc A and 1 time
       // in doc B, with k1=0 the scores should be identical for that
       // term (TF ignored, only IDF contributes).
-      final flat = BM25Index(documents: const [
-        ['parse', 'parse', 'parse', 'config'],
-        ['parse', 'config'],
-      ], k1: 0);
+      final flat = BM25Index(
+        documents: const [
+          ['parse', 'parse', 'parse', 'config'],
+          ['parse', 'config'],
+        ],
+        k1: 0,
+      );
       // Both docs have config=1, parse=any; with k1=0, scores equal.
       expect(
         flat.scoreDoc(0, ['parse', 'config']),
@@ -137,10 +160,13 @@ void main() {
     test('k1=large amplifies TF differences', () {
       // Same setup as the k1=0 test but with k1 huge: doc with more
       // parse tokens scores higher.
-      final flat = BM25Index(documents: const [
-        ['parse', 'parse', 'parse', 'config'],
-        ['parse', 'config'],
-      ], k1: 100);
+      final flat = BM25Index(
+        documents: const [
+          ['parse', 'parse', 'parse', 'config'],
+          ['parse', 'config'],
+        ],
+        k1: 100,
+      );
       expect(
         flat.scoreDoc(0, ['parse']),
         greaterThan(flat.scoreDoc(1, ['parse'])),
@@ -152,12 +178,14 @@ void main() {
     late BM25Index idx;
 
     setUp(() {
-      idx = BM25Index(documents: const [
-        ['parse', 'config'],
-        ['parse', 'json', 'config'],
-        ['render', 'html'],
-        ['config', 'parser'],
-      ]);
+      idx = BM25Index(
+        documents: const [
+          ['parse', 'config'],
+          ['parse', 'json', 'config'],
+          ['render', 'html'],
+          ['config', 'parser'],
+        ],
+      );
     });
 
     test('returns hits sorted by descending score', () {

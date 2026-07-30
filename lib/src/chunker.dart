@@ -167,14 +167,8 @@ class AstChunker {
     // identifiers) get their chunks sliced at the wrong position.
     // Upstream Python does this conversion in
     // `semble.chunking.core.chunk`; we mirror it here.
-    final startChar = _byteOffsetToCharOffset(
-      parsed.source,
-      range.startByte,
-    );
-    final endChar = _byteOffsetToCharOffset(
-      parsed.source,
-      range.endByte,
-    );
+    final startChar = _byteOffsetToCharOffset(parsed.source, range.startByte);
+    final endChar = _byteOffsetToCharOffset(parsed.source, range.endByte);
     final start = startChar.clamp(0, parsed.source.length);
     final end = endChar.clamp(start, parsed.source.length);
     return CodeChunk(
@@ -241,9 +235,7 @@ class AstChunker {
   static int _lineForStart(String source, int charOffset) {
     if (charOffset <= 0) return 1;
     var line = 1;
-    final limit = charOffset < source.length
-        ? charOffset
-        : source.length;
+    final limit = charOffset < source.length ? charOffset : source.length;
     for (var i = 0; i < limit; i++) {
       if (source.codeUnitAt(i) == 0x0a) line++;
     }

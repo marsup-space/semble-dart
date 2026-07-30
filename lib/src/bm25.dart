@@ -21,7 +21,8 @@ class BM25Hit {
   const BM25Hit(this.docIndex, this.score);
 
   @override
-  String toString() => 'BM25Hit(doc=$docIndex, score=${score.toStringAsFixed(4)})';
+  String toString() =>
+      'BM25Hit(doc=$docIndex, score=${score.toStringAsFixed(4)})';
 }
 
 /// In-memory BM25 index. Build it once per corpus, query many times.
@@ -52,14 +53,13 @@ class BM25Index {
     required List<List<String>> documents,
     this.k1 = 1.5,
     this.b = 0.75,
-  })  : numDocs = documents.length,
-        docLengths = [for (final d in documents) d.length],
-        avgDocLength = documents.isEmpty
-            ? 0.0
-            : documents.fold<int>(0, (s, d) => s + d.length) /
-                documents.length,
-        df = _buildDf(documents),
-        tf = [for (final d in documents) _buildTf(d)] {
+  }) : numDocs = documents.length,
+       docLengths = [for (final d in documents) d.length],
+       avgDocLength = documents.isEmpty
+           ? 0.0
+           : documents.fold<int>(0, (s, d) => s + d.length) / documents.length,
+       df = _buildDf(documents),
+       tf = [for (final d in documents) _buildTf(d)] {
     if (k1 < 0) {
       throw ArgumentError.value(k1, 'k1', 'must be >= 0');
     }
@@ -90,9 +90,7 @@ class BM25Index {
   /// ad-hoc re-ranking; [query] is the common path.
   double scoreDoc(int docIndex, List<String> queryTokens) {
     if (docIndex < 0 || docIndex >= numDocs) {
-      throw RangeError(
-        'docIndex $docIndex out of range [0, $numDocs)',
-      );
+      throw RangeError('docIndex $docIndex out of range [0, $numDocs)');
     }
     if (avgDocLength == 0 || queryTokens.isEmpty) return 0.0;
     final docLen = docLengths[docIndex];

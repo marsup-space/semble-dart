@@ -68,8 +68,11 @@ class EmbeddingModel {
     if (bytes.length < 8) {
       throw ArgumentError('safetensors buffer too short for header length');
     }
-    final headerLength =
-        ByteData.sublistView(bytes, 0, 8).getUint64(0, Endian.little);
+    final headerLength = ByteData.sublistView(
+      bytes,
+      0,
+      8,
+    ).getUint64(0, Endian.little);
 
     if (bytes.length < 8 + headerLength) {
       throw ArgumentError(
