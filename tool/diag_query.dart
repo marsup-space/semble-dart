@@ -10,7 +10,6 @@ import 'package:path/path.dart' as p;
 import 'package:semble_dart/semble_dart.dart';
 import 'package:semble_dart/src/identifier_stemmer.dart';
 import 'package:semble_dart/src/sparse.dart';
-import 'package:semble_dart/src/treesitter/bindings.dart';
 
 Future<void> main(List<String> args) async {
   if (args.length < 2) {
@@ -24,13 +23,22 @@ Future<void> main(List<String> args) async {
     exit(1);
   }
 
-  final ext = Platform.isMacOS ? 'dylib' : Platform.isLinux ? 'so' : 'dll';
+  final ext = Platform.isMacOS
+      ? 'dylib'
+      : Platform.isLinux
+      ? 'so'
+      : 'dll';
   final target = Platform.isMacOS ? 'macos-arm64' : 'linux-x64';
   var dylibPath = '';
   var dir = Directory.current;
-  for (var i = 0; i < 8 && dir != null; i++) {
-    final candidate = p.join(dir.path, 'third_party', 'bin', target,
-        'libcrux_grammars.$ext');
+  for (var i = 0; i < 8; i++) {
+    final candidate = p.join(
+      dir.path,
+      'third_party',
+      'bin',
+      target,
+      'libcrux_grammars.$ext',
+    );
     if (File(candidate).existsSync()) {
       dylibPath = candidate;
       break;
@@ -44,8 +52,16 @@ Future<void> main(List<String> args) async {
 
   final ts = await TreeSitter.load(path: dylibPath);
   for (final lang in const [
-    'dart', 'python', 'rust', 'typescript', 'tsx', 'go',
-    'javascript', 'cpp', 'ruby', 'php',
+    'dart',
+    'python',
+    'rust',
+    'typescript',
+    'tsx',
+    'go',
+    'javascript',
+    'cpp',
+    'ruby',
+    'php',
   ]) {
     ts.registerLanguage(lang);
   }
@@ -77,18 +93,31 @@ Future<void> main(List<String> args) async {
       final df = bm25.df[term] ?? 0;
       if (df == 0) continue;
       final idf = math.log(1 + (bm25.numDocs - df + 0.5) / (df + 0.5));
-      final tfNorm = f * (1.5 + 1) /
-          (f + 1.5 * (1 - 0.75 + 0.75 * bm25.docLengths[i] / bm25.avgDocLength));
+      final tfNorm =
+          f *
+          (1.5 + 1) /
+          (f +
+              1.5 * (1 - 0.75 + 0.75 * bm25.docLengths[i] / bm25.avgDocLength));
       score += idf * tfNorm;
     }
     // Path tokens (file stem + last 3 dirs)
-    final pathText = enrichForBm25(content: '', filePath: index.chunks[i].filePath).trim();
+    final pathText = enrichForBm25(
+      content: '',
+      filePath: index.chunks[i].filePath,
+    ).trim();
     final pathTokens = stemmer.tokenizeText(pathText);
     final pathHits = <String>[];
     for (final term in queryStems) {
       if (pathTokens.contains(term)) pathHits.add(term);
     }
-    rows.add([i, index.chunks[i].filePath, score, hitTerms, pathHits, bm25.docLengths[i]]);
+    rows.add([
+      i,
+      index.chunks[i].filePath,
+      score,
+      hitTerms,
+      pathHits,
+      bm25.docLengths[i],
+    ]);
   }
   rows.sort((a, b) => (b[2] as double).compareTo(a[2] as double));
 
@@ -96,8 +125,10 @@ Future<void> main(List<String> args) async {
   print('stems: $queryStems');
   print('');
   print('top 15 BM25 candidates:');
-  print('${'rank'.padLeft(4)} | ${'file'.padRight(50)} | ${'bm25'.padLeft(7)} '
-      '| ${'docLen'.padLeft(6)} | term hits / path hits');
+  print(
+    '${'rank'.padLeft(4)} | ${'file'.padRight(50)} | ${'bm25'.padLeft(7)} '
+    '| ${'docLen'.padLeft(6)} | term hits / path hits',
+  );
   for (var k = 0; k < 15 && k < rows.length; k++) {
     final row = rows[k];
     final path = (row[1] as String).length > 50
@@ -106,14 +137,10 @@ Future<void> main(List<String> args) async {
     final hits = (row[3] as List).join(',');
     final pathHits = (row[4] as List).join(',');
     print(
-        '${k.toString().padLeft(4)} | ${path.padRight(50)} | '
-        '${(row[2] as double).toStringAsFixed(3).padLeft(7)} | '
-        '${(row[5] as int).toString().padLeft(6)} | '
-        '$hits  /  $pathHits');
+      '${k.toString().padLeft(4)} | ${path.padRight(50)} | '
+      '${(row[2] as double).toStringAsFixed(3).padLeft(7)} | '
+      '${(row[5] as int).toString().padLeft(6)} | '
+      '$hits  /  $pathHits',
+    );
   }
-}
-
-double _log(double x) {
-  if (x <= 0) return 0;
-  return math.log(x);
 }

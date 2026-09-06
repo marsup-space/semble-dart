@@ -13,8 +13,6 @@
 /// spaces, ignoring `.` and `/` root markers.
 library;
 
-import 'package:path/path.dart' as p;
-
 /// Append file-path tokens to [content] for BM25 indexing.
 ///
 /// The chunk's `filePath` is expected to be repo-relative (set by
