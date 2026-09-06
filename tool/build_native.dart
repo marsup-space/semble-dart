@@ -439,23 +439,27 @@ String? _detectHost() {
 }
 
 String? _resolveCc(String target) {
-  // POSIX: prefer clang, fall back to cc/gcc. Windows: cl.exe (not
-  // implemented in v1; we surface the error clearly).
+  // GitHub's Windows release runner uses MSYS2 UCRT64, which provides
+  // gcc.exe rather than Visual Studio's cl.exe. The build flags below are
+  // GNU-style already, so prefer MinGW GCC there. Keep cl.exe as a fallback
+  // for developer shells that expose it, then use the usual POSIX search.
   if (target.startsWith('windows')) {
-    final cl = _which('cl.exe');
-    if (cl != null) return cl;
-    return null;
+    return _which('gcc.exe') ??
+        _which('gcc') ??
+        _which('clang.exe') ??
+        _which('clang') ??
+        _which('cl.exe');
   }
   return _which('clang') ?? _which('cc') ?? _which('gcc');
 }
 
 String? _which(String name) {
-  final result = Process.runSync('which', [name]);
-  if (result.exitCode == 0) {
-    final p = (result.stdout as String).trim();
-    return p.isEmpty ? null : p;
-  }
-  return null;
+  final lookup = Platform.isWindows ? 'where.exe' : 'which';
+  final result = Process.runSync(lookup, [name]);
+  if (result.exitCode != 0) return null;
+  final output = (result.stdout as String).trim();
+  if (output.isEmpty) return null;
+  return output.split(RegExp(r'\r?\n')).first.trim();
 }
 
 Future<bool> _ensureClone(Directory dir, String repo, String? tag) async {
