@@ -355,11 +355,21 @@ Future<bool> _buildTarget(String target) async {
     shimObj,
     ...grammarObjs,
   ];
-  if (target == 'linux-arm64' || target == 'linux-x64') {
+        if (target == 'linux-arm64' || target == 'linux-x64') {
     // Linux needs libstdc++ for the C++ scanners in some grammars
     // (tree-sitter-cpp uses C++ in its scanner.c).
     linkArgs.add('-lstdc++');
   }
+  if (target.startsWith('windows')) {
+    // tree-sitter v0.26's vendored Unicode header delegates safe UTF-8
+    // helpers to ICU. The release runner installs the matching UCRT64 ICU
+    // package, and this links the DLL import library into the grammar bundle.
+    linkArgs.add('-licuuc');
+  }
+
+
+
+
   if (!await _run(cc, linkArgs)) {
     return false;
   }
