@@ -132,7 +132,7 @@ Future<void> main(List<String> args) async {
   for (var k = 0; k < 15 && k < rows.length; k++) {
     final row = rows[k];
     final path = (row[1] as String).length > 50
-        ? '...' + (row[1] as String).substring((row[1] as String).length - 47)
+        ? '...${(row[1] as String).substring((row[1] as String).length - 47)}'
         : row[1] as String;
     final hits = (row[3] as List).join(',');
     final pathHits = (row[4] as List).join(',');
