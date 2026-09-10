@@ -1,7 +1,7 @@
 // Quick end-to-end demo: parse a real Dart file via tree-sitter
 // and print the top-level named children. Run with:
 //
-//   cd /Users/wuhao/Projects/crux/semble-dart
+//   cd path/to/semble-dart
 //   dart run example/chunk_demo.dart <path-to-dart-file>
 
 import 'dart:io';

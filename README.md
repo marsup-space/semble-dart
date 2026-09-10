@@ -2,7 +2,7 @@
 
 Pure-Dart port of [MinishLab/semble](https://github.com/MinishLab/semble) for in-process semantic code search.
 
-Used by [Crux](https://github.com/marsup-space/crux) as the implementation behind the `semantic_search` and `find_similar_code` agent tools. See the parent repo's `docs/design-semble-dart-port.md` for the port plan, architecture, and decision log.
+Used by [Crux](https://github.com/marsup-space/crux) as the implementation behind the `semantic_search` and `find_similar_code` agent tools.
 
 ## Status
 

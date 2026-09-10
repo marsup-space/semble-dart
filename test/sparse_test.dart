@@ -14,13 +14,14 @@ String? _pythonEnrich(String content, String filePath) {
   // shell out to Python via the same venv used by the bench, so the
   // test stays self-contained. If the venv is missing (e.g. on CI
   // runners without the bench repo), skip.
-  const venvPython =
-      '/Users/wuhao/Projects/crux/.research/semble/.bench-venv/bin/python';
+  final upstreamDir = Platform.environment['SEMBLE_UPSTREAM_DIR'] ??
+      '${Directory.current.parent.path}/.research/semble';
+  final venvPython = '$upstreamDir/.bench-venv/bin/python';
   try {
     final result = Process.runSync(venvPython, [
       '-c',
       'import sys; '
-          'sys.path.insert(0, "/Users/wuhao/Projects/crux/.research/semble/src"); '
+          'sys.path.insert(0, sys.argv[3] + "/src"); '
           'from pathlib import Path; '
           'from semble.types import Chunk; '
           'from semble.index.sparse import enrich_for_bm25; '
@@ -29,6 +30,7 @@ String? _pythonEnrich(String content, String filePath) {
           'print(enrich_for_bm25(c), end="")',
       content,
       filePath,
+      upstreamDir,
     ]);
     if (result.exitCode != 0) return null;
     return result.stdout as String;
