@@ -157,7 +157,9 @@ Future<int> main(List<String> args) async {
 
   final targets = opts.targets;
   if (targets.isEmpty) {
-    stderr.writeln('No targets specified (use --target or run with no args for current host).');
+    stderr.writeln(
+      'No targets specified (use --target or run with no args for current host).',
+    );
     return 64;
   }
 
@@ -234,15 +236,16 @@ Future<bool> _buildTarget(String target) async {
   stdout.writeln('  → cc -c libtree-sitter/lib/src/lib.c');
   final tsLibObj = p.join(objDir.path, 'lib.o');
   final tsSrc = File(p.join(tsDir.path, 'lib', 'src', 'lib.c'));
-  if (!await _run(
-    cc,
-    [
-      '-c', '-fPIC', '-O2',
-      '-I', p.join(tsDir.path, 'lib', 'include'),
-      '-o', tsLibObj,
-      tsSrc.path,
-    ],
-  )) {
+  if (!await _run(cc, [
+    '-c',
+    '-fPIC',
+    '-O2',
+    '-I',
+    p.join(tsDir.path, 'lib', 'include'),
+    '-o',
+    tsLibObj,
+    tsSrc.path,
+  ])) {
     return false;
   }
 
@@ -262,7 +265,9 @@ Future<bool> _buildTarget(String target) async {
       final scannerC = File(p.join(srcDir.path, 'scanner.c'));
 
       if (!parserC.existsSync()) {
-        stderr.writeln('  ⚠ $lang/${src.subDir}: missing parser.c at ${parserC.path}');
+        stderr.writeln(
+          '  ⚠ $lang/${src.subDir}: missing parser.c at ${parserC.path}',
+        );
         return false;
       }
 
@@ -270,9 +275,7 @@ Future<bool> _buildTarget(String target) async {
       // for subsequent ones (typescript.tsx.o, etc.). The grammar's
       // include path is the FIRST source's directory (and `common/`
       // for multi-source grammars).
-      final objName = i == 0
-          ? '$lang.o'
-          : '$lang-${p.basename(src.subDir)}.o';
+      final objName = i == 0 ? '$lang.o' : '$lang-${p.basename(src.subDir)}.o';
       final obj = p.join(objDir.path, objName);
       final includePaths = <String>[
         srcDir.path,
@@ -284,20 +287,28 @@ Future<bool> _buildTarget(String target) async {
       ];
       stdout.writeln('  → cc -c $lang/${src.subDir}/parser.c');
       if (!await _run(cc, [
-        '-c', '-fPIC', '-O2',
+        '-c',
+        '-fPIC',
+        '-O2',
         for (final ip in includePaths) '-I$ip',
-        '-o', obj,
+        '-o',
+        obj,
         parserC.path,
       ])) {
         return false;
       }
       if (scannerC.existsSync()) {
-        stdout.writeln('  → cc -c $lang/${src.subDir}/scanner.c (external scanner)');
+        stdout.writeln(
+          '  → cc -c $lang/${src.subDir}/scanner.c (external scanner)',
+        );
         final scannerObj = p.join(objDir.path, '$objName-scanner');
         if (!await _run(cc, [
-          '-c', '-fPIC', '-O2',
+          '-c',
+          '-fPIC',
+          '-O2',
           for (final ip in includePaths) '-I$ip',
-          '-o', scannerObj,
+          '-o',
+          scannerObj,
           scannerC.path,
         ])) {
           return false;
@@ -319,9 +330,13 @@ Future<bool> _buildTarget(String target) async {
     return false;
   }
   if (!await _run(cc, [
-    '-c', '-fPIC', '-O2',
-    '-I', p.join(tsDir.path, 'lib', 'include'),
-    '-o', shimObj,
+    '-c',
+    '-fPIC',
+    '-O2',
+    '-I',
+    p.join(tsDir.path, 'lib', 'include'),
+    '-o',
+    shimObj,
     shimSrc.path,
   ])) {
     return false;
@@ -341,6 +356,10 @@ Future<bool> _buildTarget(String target) async {
     '-O2',
     if (target.startsWith('macos'))
       '-Wl,-export_dynamic'
+    else if (target.startsWith('windows'))
+      // PE DLLs do not honor --export-dynamic. MinGW needs this flag to
+      // populate the export table with tree-sitter and Dart FFI shim symbols.
+      '-Wl,--export-all-symbols'
     else
       '-Wl,--export-dynamic',
     // Force-keep the shim — it's the only caller of
@@ -355,7 +374,7 @@ Future<bool> _buildTarget(String target) async {
     shimObj,
     ...grammarObjs,
   ];
-        if (target == 'linux-arm64' || target == 'linux-x64') {
+  if (target == 'linux-arm64' || target == 'linux-x64') {
     // Linux needs libstdc++ for the C++ scanners in some grammars
     // (tree-sitter-cpp uses C++ in its scanner.c).
     linkArgs.add('-lstdc++');
@@ -367,9 +386,6 @@ Future<bool> _buildTarget(String target) async {
     linkArgs.add('-licuuc');
   }
 
-
-
-
   if (!await _run(cc, linkArgs)) {
     return false;
   }
@@ -379,7 +395,9 @@ Future<bool> _buildTarget(String target) async {
   stdout.writeln('');
   stdout.writeln('  ✔ built: $outPath');
   stdout.writeln('    sha256: $sha');
-  stdout.writeln('    size:   ${(File(outPath).lengthSync() / 1024 / 1024).toStringAsFixed(1)} MB');
+  stdout.writeln(
+    '    size:   ${(File(outPath).lengthSync() / 1024 / 1024).toStringAsFixed(1)} MB',
+  );
   stdout.writeln('');
   return true;
 }
@@ -411,14 +429,21 @@ _Opts _parseArgs(List<String> args) {
         final v = (i + 1 < args.length) ? args[++i] : '';
         opts.targets = v == 'all'
             ? _hostTargets.values.toList()
-            : v.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+            : v
+                  .split(',')
+                  .map((s) => s.trim())
+                  .where((s) => s.isNotEmpty)
+                  .toList();
       default:
         stderr.writeln('unknown arg: $a');
         opts.showHelp = true;
     }
   }
   // No --target → default to current host.
-  if (opts.targets.isEmpty && !opts.showHelp && !opts.listGrammars && !opts.clean) {
+  if (opts.targets.isEmpty &&
+      !opts.showHelp &&
+      !opts.listGrammars &&
+      !opts.clean) {
     final host = _detectHost();
     if (host != null) {
       opts.targets = [_hostTargets[host]!];
@@ -494,9 +519,12 @@ Future<bool> _ensureClone(Directory dir, String repo, String? tag) async {
       : 'git@github.com:$repo.git';
   // ignore: use_null_aware_elements
   final args = <String>[
-    'clone', '--depth', '1',
+    'clone',
+    '--depth',
+    '1',
     if (tag != null) ...<String>['--branch', tag],
-    cloneUrl, dir.path,
+    cloneUrl,
+    dir.path,
   ];
   stdout.writeln('    git clone ${args.sublist(1).join(' ')}');
   return await _run('git', args);
@@ -552,9 +580,13 @@ void _printGrammars() {
   for (final entry in _grammarRepos.entries) {
     final spec = entry.value;
     for (final src in spec.sources) {
-      stdout.writeln('  ${entry.key.padRight(12)} ${src.entryPoint}()  ← ${spec.repo}');
+      stdout.writeln(
+        '  ${entry.key.padRight(12)} ${src.entryPoint}()  ← ${spec.repo}',
+      );
     }
   }
   stdout.writeln('');
-  stdout.writeln('Plus libtree-sitter runtime: $_treeSitterRepo @ $_treeSitterTag');
+  stdout.writeln(
+    'Plus libtree-sitter runtime: $_treeSitterRepo @ $_treeSitterTag',
+  );
 }

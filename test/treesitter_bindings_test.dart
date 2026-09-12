@@ -32,7 +32,11 @@ Future<TreeSitter?> _loadIfAvailable() async {
   // Walk up from Directory.current (the test runner's cwd IS the
   // package root for `dart test`). Platform.script is unreliable
   // for the test runner.
-  final target = Platform.isMacOS ? 'macos-arm64' : 'linux-x64';
+  final target = Platform.isMacOS
+      ? 'macos-arm64'
+      : Platform.isWindows
+      ? 'windows-x64'
+      : 'linux-x64';
   var dir = Directory.current;
   for (var i = 0; i < 8; i++) {
     final p = '${dir.path}/third_party/bin/$target/libcrux_grammars.$ext';

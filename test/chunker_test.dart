@@ -16,7 +16,11 @@ Future<TreeSitter?> _loadIfAvailable() async {
       ? 'dll'
       : null;
   if (ext == null) return null;
-  final target = Platform.isMacOS ? 'macos-arm64' : 'linux-x64';
+  final target = Platform.isMacOS
+      ? 'macos-arm64'
+      : Platform.isWindows
+      ? 'windows-x64'
+      : 'linux-x64';
   var dir = Directory.current;
   for (var i = 0; i < 8; i++) {
     final p = '${dir.path}/third_party/bin/$target/libcrux_grammars.$ext';
